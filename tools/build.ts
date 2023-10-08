@@ -84,7 +84,7 @@ npmlog.info('Build.SubModules', '(2/2) Fetching submodules... DONE');
 npmlog.info('Build', 'Updating submodules... DONE');
 
 npmlog.info('Build', 'Preparing test data...');
-const prepareTestData = cleanInstall || !fs.existsSync(TEST_DATA_NODE);
+const prepareTestData = false;//cleanInstall || !fs.existsSync(TEST_DATA_NODE);
 if (prepareTestData) {
   // Step 1: Clean folders if needed
   npmlog.info('Build.TestData', '(1/3) Cleaning folder...');
@@ -216,10 +216,14 @@ npmlog.info('Build', `Building bundle...`);
 if (buildBundle) {
   // only generate bundle when WASM is built
   //
+  /*
   if (!fs.existsSync(OUT_WASM)) {
     npmlog.error('Build.Bundle', `Cannot find wasm file: ${OUT_WASM}. Please build WebAssembly sources first.`);
     process.exit(2);
-  } else {
+  } else 
+  */
+ console.log(OUT_WASM);
+  {
     npmlog.info('Build.Bundle', '(1/2) Retrieving npm bin folder...');
     const npmBin = execSync('npm bin', {encoding: 'utf8'}).trimRight();
     npmlog.info('Build.Bundle', `(1/2) Retrieving npm bin folder... DONE, folder: ${npmBin}`);
