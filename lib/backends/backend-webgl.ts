@@ -72,7 +72,7 @@ export class WebGLBackend implements Backend {
 
       Logger.setWithEnv(env);
 
-      if (!env.webgl.context) {
+      if (!env.webgl.contextId) {
         Object.defineProperty(env.webgl, 'context', {value: this.glContext.gl});
       }
 
