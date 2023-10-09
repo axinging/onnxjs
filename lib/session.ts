@@ -1,15 +1,20 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import {readFile} from 'node:fs/promises';
+// import {readFile} from 'node:fs/promises';
 
-import {resolveBackend, SessionHandlerType} from './backend';
-import {ExecutionPlan} from './execution-plan';
+// import {resolveBackend, SessionHandlerType} from './backend';
+// import {ExecutionPlan} from './execution-plan';
 import {Graph} from './graph';
 import {Profiler} from './instrument';
 import {Model} from './model';
 import {Operator} from './operators';
 import {Tensor} from './tensor';
+
+async function readFile(path: string) {
+  const respose = await fetch(path);
+  return new Uint8Array(await respose.arrayBuffer());
+}
 
 export declare namespace Session {
   export interface Config {
@@ -27,7 +32,7 @@ export declare namespace Session {
 export class Session {
   constructor(config: Session.Config = {}) {
     this._initialized = false;
-    this.backendHint = config.backendHint;
+    //this.backendHint = config.backendHint;
     this.profiler = Profiler.create(config.profiler);
     this.context = {profiler: this.profiler, graphInputTypes: [], graphInputDims: []};
   }
@@ -53,8 +58,8 @@ export class Session {
   async loadModel(arg: string|ArrayBuffer|Uint8Array, byteOffset?: number, length?: number): Promise<void> {
     await this.profiler.event('session', 'Session.loadModel', async () => {
       // resolve backend and session handler
-      const backend = await resolveBackend(this.backendHint);
-      this.sessionHandler = backend.createSessionHandler(this.context);
+      //const backend = await resolveBackend(this.backendHint);
+      //this.sessionHandler = backend.createSessionHandler(this.context);
 
       this._model = new Model();
       if (typeof arg === 'string') {
@@ -86,6 +91,7 @@ export class Session {
     }
 
     this.profiler.event('session', 'Session.initialize', () => {
+      /*
       // load graph
       const graphInitializer =
           this.sessionHandler.transformGraph ? this.sessionHandler as Graph.Initializer : undefined;
@@ -95,28 +101,34 @@ export class Session {
       if (this.sessionHandler.onGraphInitialized) {
         this.sessionHandler.onGraphInitialized(this._model.graph);
       }
+      */
+      this._model.load(modelProtoBlob);
       // initialize each operator in the graph
       this.initializeOps(this._model.graph);
 
       // instantiate an ExecutionPlan object to be used by the Session object
-      this._executionPlan = new ExecutionPlan(this._model.graph, this._ops, this.profiler);
+      //this._executionPlan = new ExecutionPlan(this._model.graph, this._ops, this.profiler);
     });
 
     this._initialized = true;
   }
 
-  async run(inputs: Map<string, Tensor>|Tensor[]): Promise<Map<string, Tensor>> {
+  async run(inputs: Map<string, Tensor>|Tensor[]) {//: Promise<Map<string, Tensor>> {
     if (!this._initialized) {
       throw new Error('session not initialized yet');
     }
-
+    const inputTensors = this.normalizeAndValidateInputs(inputs);
+    console.log(inputTensors);
+    /*
     return this.profiler.event('session', 'Session.run', async () => {
-      const inputTensors = this.normalizeAndValidateInputs(inputs);
+      //const inputTensors = this.normalizeAndValidateInputs(inputs);
 
-      const outputTensors = await this._executionPlan.execute(this.sessionHandler, inputTensors);
+      //const outputTensors = await this._executionPlan.execute(this.sessionHandler, inputTensors);
 
-      return this.createOutput(outputTensors);
+      //return this.createOutput(outputTensors);
+      return null;
     });
+    */
   }
 
   private normalizeAndValidateInputs(inputs: Map<string, Tensor>|Tensor[]): Tensor[] {
@@ -220,6 +232,7 @@ export class Session {
     return true;
   }
 
+  /*
   private createOutput(outputTensors: Tensor[]): Map<string, Tensor> {
     const modelOutputNames = this._model.graph.getOutputNames();
     if (outputTensors.length !== modelOutputNames.length) {
@@ -233,13 +246,14 @@ export class Session {
 
     return output;
   }
-
+  */
   private initializeOps(graph: Graph): void {
     const nodes = graph.getNodes();
     this._ops = new Array(nodes.length);
+    console.log(this._ops);
 
     for (let i = 0; i < nodes.length; i++) {
-      this._ops[i] = this.sessionHandler.resolve(nodes[i], this._model.opsets, graph);
+      //this._ops[i] = this.sessionHandler.resolve(nodes[i], this._model.opsets, graph);
     }
   }
 
@@ -247,11 +261,11 @@ export class Session {
   private _initialized: boolean;
 
   private _ops: Operator[];
-  private _executionPlan: ExecutionPlan;
+  //private _executionPlan: ExecutionPlan;
 
-  private backendHint?: string;
+  //private backendHint?: string;
 
-  private sessionHandler: SessionHandlerType;
+  //private sessionHandler: SessionHandlerType;
   private context: Session.Context;
   private profiler: Readonly<Profiler>;
 }

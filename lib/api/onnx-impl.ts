@@ -12,6 +12,9 @@ import {Backend} from './onnx';
 export * from './env';
 export * from './onnx';
 export * from './tensor';
+export * from '../graph';
+export * from '../model';
+export * from '../session';
 // export * from './inference-session_ts';
 
 export const backend: Backend = {

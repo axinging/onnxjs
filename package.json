@@ -3,7 +3,7 @@
   "version": "0.1.8",
   "description": "A Javascript library for running ONNX models on browsers and on Node.js",
   "main": "./lib/api/index.js",
-  "browser": "./dist/onnx.min.js",
+  "browser": "./dist/onnx.js",
   "types": "./types/lib/api/index.d.ts",
   "scripts": {
     "prepare": "tsc && node tools/build",

@@ -230,7 +230,7 @@ if (buildBundle) {
 
     npmlog.info('Build.Bundle', '(2/2) Running webpack to generate onnx.min.js...');
     const webpackCommand = path.join(npmBin, 'webpack');
-    const webpackArgs = ['--bundle-mode', 'prod'];
+    const webpackArgs = ['--bundle-mode', 'development'];
     npmlog.info('Build.Bundle', `CMD: ${webpackCommand} ${webpackArgs.join(' ')}`);
     const webpack = spawnSync(webpackCommand, webpackArgs, {shell: true, stdio: 'inherit'});
     if (webpack.status !== 0) {

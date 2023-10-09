@@ -14,7 +14,8 @@ module.exports = (env, argv) => {
   };
 
   if (bundleMode === 'perf' || bundleMode === 'dev') {
-    config.entry = path.resolve(__dirname, 'test/test-main.ts');
+    //config.entry = path.resolve(__dirname, 'test/test-main.ts');
+    config.entry = path.resolve(__dirname, 'lib/api/index.ts');
   } else {
     config.entry = path.resolve(__dirname, 'lib/api/index.ts');
   }
