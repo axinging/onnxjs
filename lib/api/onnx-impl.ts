@@ -15,6 +15,7 @@ export * from './tensor';
 export * from '../graph';
 export * from '../model';
 export * from '../session';
+export * as onnxproto from '../ort-schema/protobuf/onnx';
 // export * from './inference-session_ts';
 
 export const backend: Backend = {
