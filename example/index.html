@@ -8,24 +8,22 @@
     <!-- consume a single file bundle -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script type="module" src="protobuf.js"></script>
-    <script type="module" src="onnx.js"></script>
+    <!--script type="module" src="onnx.js"></script-->
     <script src="../test/onnx.dev.js"></script>
     <script type="module" src="onnxdecoder.js"></script>
     <script type="module">
-        import * as onnxModule from "./onnx.js";
+        // import * as onnxModule from "./onnx.js";
         import * as onnxdecoder from "./onnxdecoder.js";
         console.log(onnx);
-        console.log(onnxModule.onnx);
         const onnxProto = onnx.onnxproto.onnx; //onnxModule.onnx;
-        // const onnxdecoder = onnxdecoderModule.createOnnxModel;
         async function main() {
-            console.log((protobuf));
-            console.log((onnxProto));
+            //console.log((protobuf));
+            //console.log((onnxProto));
 
             {
                 const session = new onnx.Session();
                 const model = await session.loadModel('dump.onnx');
-                console.log(model);
+                console.log(session._model);
             }
 
             const model = onnxProto.ModelProto.create();
@@ -39,9 +37,8 @@
 
             let response2 = await fetch("add-input.json");
             response2 = await response2.json();
-            const session = (await onnxdecoder.createOnnxModel(response));
+            const session = (await onnxdecoder.createOnnxModel(response, onnxProto));
             console.log(await onnxdecoder.runProtoOpTestcase(session, response2));
-
         }
         main();
     </script>

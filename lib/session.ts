@@ -56,33 +56,27 @@ export class Session {
   async loadModel(buffer: ArrayBuffer, byteOffset?: number, length?: number): Promise<void>;
   async loadModel(buffer: Uint8Array): Promise<void>;
   async loadModel(arg: string|ArrayBuffer|Uint8Array, byteOffset?: number, length?: number): Promise<void> {
-    await this.profiler.event('session', 'Session.loadModel', async () => {
-      // resolve backend and session handler
-      //const backend = await resolveBackend(this.backendHint);
-      //this.sessionHandler = backend.createSessionHandler(this.context);
-
-      this._model = new Model();
-      if (typeof arg === 'string') {
-        const isOrtFormat = arg.endsWith('.ort');
-        if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-          // node
-          const buf = await readFile(arg);
-          this.initialize(buf, isOrtFormat);
-        } else {
-          // browser
-          const response = await fetch(arg);
-          const buf = await response.arrayBuffer();
-          this.initialize(new Uint8Array(buf), isOrtFormat);
-        }
-      } else if (!ArrayBuffer.isView(arg)) {
-        // load model from ArrayBuffer
-        const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
-        this.initialize(arr);
+    this._model = new Model();
+    if (typeof arg === 'string') {
+      const isOrtFormat = arg.endsWith('.ort');
+      if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+        // node
+        const buf = await readFile(arg);
+        this.initialize(buf, isOrtFormat);
       } else {
-        // load model from Uint8array
-        this.initialize(arg);
+        // browser
+        const response = await fetch(arg);
+        const buf = await response.arrayBuffer();
+        this.initialize(new Uint8Array(buf), isOrtFormat);
       }
-    });
+    } else if (!ArrayBuffer.isView(arg)) {
+      // load model from ArrayBuffer
+      const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
+      this.initialize(arr);
+    } else {
+      // load model from Uint8array
+      this.initialize(arg);
+    }
   }
 
   private initialize(modelProtoBlob: Uint8Array, isOrtFormat?: boolean): void {
@@ -109,7 +103,9 @@ export class Session {
       // instantiate an ExecutionPlan object to be used by the Session object
       //this._executionPlan = new ExecutionPlan(this._model.graph, this._ops, this.profiler);
     });
-
+    this._model.load(modelProtoBlob);
+    // initialize each operator in the graph
+    this.initializeOps(this._model.graph);
     this._initialized = true;
   }
 

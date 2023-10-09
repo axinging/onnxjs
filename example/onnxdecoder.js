@@ -1,8 +1,9 @@
-import * as onnxModule from './onnx.js';
+// import * as onnxModule from './onnx.js';
 import {tensorDataTypeStringToEnum } from "./onnxdecoder_util.js";
-const onnx = onnxModule.onnx;
 
-export async  function createOnnxModel(test) {
+
+export async  function createOnnxModel(test, onnx) {
+  // const onnx = onnx;
   const opsetImport = onnx.OperatorSetIdProto.create(test.opset);
   const operator = test.operator;
   const attribute = (test.attributes || []).map(attr => {
@@ -143,7 +144,7 @@ export async  function createOnnxModel(test) {
     const loadedData = onnx.ModelProto.encode(model).finish();
 
     const session = await ort.InferenceSession.create(
-      loadedData, {executionProviders: [backendHint], ...{executionProviders: ['webgpu']}});
+      loadedData, {executionProviders: [backendHint], ...{executionProviders: ['cpu']}});
   return  session;
 }
 
