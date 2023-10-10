@@ -24,9 +24,9 @@ module.exports = (env, argv) => {
   if (bundleMode === 'perf') {
     config.output = {path: path.resolve(__dirname, 'test'), filename: 'onnx.perf.js', libraryTarget: 'umd'};
   } else if (bundleMode === 'development') {
-    config.output = {path: path.resolve(__dirname, 'test'), filename: 'onnx.dev.js', libraryTarget: 'umd'};
+    config.output = {path: path.resolve(__dirname, 'test'), filename: 'onnx.dev.js', libraryTarget: 'umd', globalObject: 'this'};
   } else {
-    config.output = {path: path.resolve(__dirname, 'dist'), filename: 'onnx.min.js', libraryTarget: 'umd'};
+    config.output = {path: path.resolve(__dirname, 'dist'), filename: 'onnx.min.js', libraryTarget: 'umd',globalObject: 'this'};
   }
 
   if (bundleMode === 'prod') {
