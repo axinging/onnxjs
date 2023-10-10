@@ -1,16 +1,17 @@
 const util = require('util');
 const path = require('path');
 const webpack = require('webpack');
-const HardSourceWebpackPlugin = require('hard-source-webpack-plugin');
+// const HardSourceWebpackPlugin = require('hard-source-webpack-plugin');
 
 module.exports = (env, argv) => {
-  const bundleMode = argv['bundle-mode'] || 'prod';  // 'prod'|'dev'|'perf'|undefined;
+  const bundleMode = argv['mode'] || 'prod';  // 'prod'|'dev'|'perf'|undefined;
 
   const config = {
     resolve: {extensions: ['.ts', '.js']},
-    plugins: [new webpack.WatchIgnorePlugin([/\.js$/, /\.d\.ts$/])],
+    plugins: [new webpack.WatchIgnorePlugin({paths:[/\.js$/, /\.d\.ts$/]})],
+    //plugins: new webpack.WatchIgnorePlugin ({paths: [ 'src/test' ]}),
     module: {rules: [{test: /\.tsx?$/, loader: 'ts-loader'}]},
-    node: {fs: 'empty'}
+    //node: {fs: 'empty'}
   };
 
   if (bundleMode === 'perf' || bundleMode === 'dev') {
@@ -19,10 +20,10 @@ module.exports = (env, argv) => {
   } else {
     config.entry = path.resolve(__dirname, 'lib/api/index.ts');
   }
-
+  console.log("bundleMode" + bundleMode);
   if (bundleMode === 'perf') {
     config.output = {path: path.resolve(__dirname, 'test'), filename: 'onnx.perf.js', libraryTarget: 'umd'};
-  } else if (bundleMode === 'dev') {
+  } else if (bundleMode === 'development') {
     config.output = {path: path.resolve(__dirname, 'test'), filename: 'onnx.dev.js', libraryTarget: 'umd'};
   } else {
     config.output = {path: path.resolve(__dirname, 'dist'), filename: 'onnx.min.js', libraryTarget: 'umd'};
@@ -37,7 +38,7 @@ module.exports = (env, argv) => {
   } else {
     config.mode = 'development';
     config.devtool = 'inline-source-map';
-    config.plugins.push(new HardSourceWebpackPlugin());
+    //config.plugins.push(new HardSourceWebpackPlugin());
   }
 
   return config;
