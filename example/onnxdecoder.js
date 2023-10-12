@@ -144,7 +144,7 @@ export async  function createOnnxModel(test, onnx) {
     const loadedData = onnx.ModelProto.encode(model).finish();
 
     const session = await ort.InferenceSession.create(
-      loadedData, {executionProviders: [backendHint], ...{executionProviders: ['cpu']}});
+      loadedData, {executionProviders: [backendHint], ...{executionProviders: ['wasm']}});
   return  session;
 }
 
