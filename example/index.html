@@ -16,15 +16,23 @@
         import * as onnxdecoder from "./onnxdecoder.js";
         console.log(onnx);
         const onnxProto = onnx.onnxproto.onnx; //onnxModule.onnx;
+        async function onnxNodeToOrtNode(onnxNode){
+
+        }
+
         async function main() {
             //console.log((protobuf));
             //console.log((onnxProto));
-
+            let node0;
             {
                 const session = new onnx.Session();
                 const model = await session.loadModel('dump.onnx');
                 console.log(session._model);
+                node0 = session._model.graph._nodes[0];
             }
+            console.log(node0);
+            ort.env.debug = true
+            ort.env.logLevel = 'verbose';
 
             const model = onnxProto.ModelProto.create();
             model.irVersion = onnxProto.Version.IR_VERSION;
@@ -35,8 +43,8 @@
             response = await response.json();
             console.log(response);
 
-            let response2 = await fetch("add-input.json");
-            response2 = await response2.json();
+            const response2 = response["cases"][0];
+            console.log(response2);
             const session = (await onnxdecoder.createOnnxModel(response, onnxProto));
             console.log(await onnxdecoder.runProtoOpTestcase(session, response2));
         }
