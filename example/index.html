@@ -15,22 +15,44 @@
     <script type="module">
         // import * as onnxModule from "./onnx.js";
         import * as onnxdecoder from "./onnxdecoder.js";
-        console.log(onnx);
         const onnxProto = onnx.onnxproto.onnx; //onnxModule.onnx;
-        async function onnxNodeToOrtNode(onnxNode){
-
+        async function getDataFromJsonFile(name) {
+            // TODO: Fix constant node file not found.
+            const response = await fetch("./modeldata/" + name + ".json");
+            const json = await response.json();
+            if (json.type === 'float') {
+                json.type = 'float32';
+            }
+            return json;
         }
 
-        async function main() {
-            {
-                const session = new onnx.Session();
-                const model = await session.loadModel('dump.onnx');
-                console.log(session._model);
-                const nodes = session._model.graph._nodes;
-                for (const node of nodes) {
-                    console.log(JSON.stringify(node));
-                }
+        async function generateGraphPlan(node) {
+            const nodePlan = { name: node.name };
+            nodePlan.inputs = [];
+            nodePlan.outputs = [];
+
+            for (const inputName of node.inputNames) {
+                nodePlan.inputs.push(await getDataFromJsonFile(inputName));
             }
+            for (const outputName of node.outputNames) {
+                nodePlan.outputs.push(await getDataFromJsonFile(outputName));
+            }
+
+            const graphPlan = {
+                "name": "This is comment " + node.opType,
+                "operator": node.opType,
+                "attributes": [],
+                "cases": [
+                    nodePlan,
+                ],
+                "backend": "webgpu",
+                "opset": { "domain": "", "version": 18 }
+            };
+
+            return graphPlan;
+        }
+
+        async function runGraphPlan(graphPlan) {
             ort.env.debug = true
             ort.env.logLevel = 'verbose';
 
@@ -39,14 +61,24 @@
             //model.opsetImport.push(opsetImport);
             model.graph = onnxProto.GraphProto.create();
 
-            let response = await fetch("add.json");
-            response = await response.json();
-            console.log(response);
+            const case0 = graphPlan["cases"][0];
+            console.log('case0 : ' + JSON.stringify(case0));
+            // TODO: outputs maybe array.
+            const reference = case0['outputs'];
+            const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
+            const result = await onnxdecoder.runProtoOpTestcase(session, case0);
+            console.log("CMP reference : " + JSON.stringify(reference));
+            console.log("CMP result : " + JSON.stringify(result));
+        }
 
-            const response2 = response["cases"][0];
-            console.log(response2);
-            const session = (await onnxdecoder.createOnnxModel(response, onnxProto));
-            console.log(await onnxdecoder.runProtoOpTestcase(session, response2));
+        async function main() {
+            const session = new onnx.Session();
+            const model = await session.loadModel('dump.onnx');
+            const nodes = session._model.graph._nodes;
+            for (const node of nodes) {
+                const graphPlan = await generateGraphPlan(node);
+                await runGraphPlan(graphPlan);
+            }
         }
         main();
     </script>
