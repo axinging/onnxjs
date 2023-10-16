@@ -22,16 +22,15 @@
         }
 
         async function main() {
-            //console.log((protobuf));
-            //console.log((onnxProto));
-            let node0;
             {
                 const session = new onnx.Session();
                 const model = await session.loadModel('dump.onnx');
                 console.log(session._model);
-                node0 = session._model.graph._nodes[0];
+                const nodes = session._model.graph._nodes;
+                for (const node of nodes) {
+                    console.log(JSON.stringify(node));
+                }
             }
-            console.log(node0);
             ort.env.debug = true
             ort.env.logLevel = 'verbose';
 
