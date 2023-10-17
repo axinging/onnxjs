@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<header>
+    <title>ONNX Runtime JavaScript examples: Quick Start - Web (using bundler)</title>
+</header>
+
+<body>
+    <!-- consume a single file bundle -->
+    <!--script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script-->
+    <script src="../node_modules/onnxruntime-web/dist/ort.all.js"></script>
+    <!--script type="module" src="protobuf.js"></script-->
+    <!--script type="module" src="onnx.js"></script-->
+    <!--script src="../test/onnx.dev.js"></script-->
+    <script type="module" src="onnxdecoder.js"></script>
+    <script type="module">
+        // import * as onnxModule from "./onnx.js";
+        import * as onnxdecoder from "./onnxdecoder.js";
+        const onnxProto = ort.onnxProto.onnx; //onnxModule.onnx;
+        async function getDataFromJsonFile(name) {
+            // TODO: Fix constant node file not found.
+            const response = await fetch("./modeldata/" + name + ".json");
+            const json = await response.json();
+            if (json.type === 'float') {
+                json.type = 'float32';
+            }
+            return json;
+        }
+
+        async function generateGraphPlan(node) {
+            const nodePlan = { name: node.name };
+            nodePlan.inputs = [];
+            nodePlan.outputs = [];
+
+            for (const inputName of node.inputNames) {
+                nodePlan.inputs.push(await getDataFromJsonFile(inputName));
+            }
+            for (const outputName of node.outputNames) {
+                nodePlan.outputs.push(await getDataFromJsonFile(outputName));
+            }
+
+            const graphPlan = {
+                "name": "This is comment " + node.opType,
+                "operator": node.opType,
+                "attributes": [],
+                "cases": [
+                    nodePlan,
+                ],
+                "backend": "webgpu",
+                "opset": { "domain": "", "version": 18 }
+            };
+
+            return graphPlan;
+        }
+
+        async function runGraphPlan(graphPlan) {
+            ort.env.debug = true
+            ort.env.logLevel = 'verbose';
+
+            const model = onnxProto.ModelProto.create();
+            model.irVersion = onnxProto.Version.IR_VERSION;
+            //model.opsetImport.push(opsetImport);
+            model.graph = onnxProto.GraphProto.create();
+
+            const case0 = graphPlan["cases"][0];
+            console.log('case0 : ' + JSON.stringify(case0));
+            // TODO: outputs maybe array.
+            const reference = case0['outputs'];
+            const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
+            const result = await onnxdecoder.runProtoOpTestcase(session, case0);
+            console.log("CMP reference : " + JSON.stringify(reference));
+            console.log("CMP result : " + JSON.stringify(result));
+        }
+
+        async function loadModel(arg, byteOffset, length) {
+            // const model = new onnx.Model();
+            const model = new ort.Model();
+            if (typeof arg === 'string') {
+                const isOrtFormat = arg.endsWith('.ort');
+                if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+                    // node
+                    const buf = await readFile(arg);
+                    // this.initialize(buf, isOrtFormat);
+                    model.load(buf);
+                } else {
+                    // browser
+                    const response = await fetch(arg);
+                    const buf = await response.arrayBuffer();
+                    //this.initialize(new Uint8Array(buf), isOrtFormat);
+                    model.load(new Uint8Array(buf));
+                }
+            } else if (!ArrayBuffer.isView(arg)) {
+                // load model from ArrayBuffer
+                const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
+                //this.initialize(arr);
+                model.load(arr);
+            } else {
+                model.load(arg);
+            }
+            return model;
+        }
+
+        async function main() {
+            // const session = new onnx.Session();
+            const model = await loadModel('dump.onnx');
+            const nodes = model.graph._nodes;
+            for (const node of nodes) {
+                const graphPlan = await generateGraphPlan(node);
+                await runGraphPlan(graphPlan);
+            }
+        }
+        main();
+    </script>
+</body>
+
+</html>
