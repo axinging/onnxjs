@@ -49,13 +49,21 @@ export async  function createOnnxModel(test, onnx) {
   const model = onnx.ModelProto.create();
   model.irVersion = onnx.Version.IR_VERSION;
   model.opsetImport.push(opsetImport);
+  //model.opsetImport.push({"domain":"com.microsoft","version":1});
+  /*
+  [{"domain":"","version":12},
+                        {"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},
+                        {"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},
+                        {"domain":"ai.onnx.preview.training","version":1},
+                        {"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}];
+                      */
   model.graph = onnx.GraphProto.create();
 
   model.graph.node = [onnx.NodeProto.create({
     input: test.cases[0].inputs.map((_, i) => `input_${i}`),
     output: test.cases[0].outputs.map((_, i) => `output_${i}`),
     opType: operator,
-    domain: test.opset?.domain,
+    domain: test.opset?.domain, //{"domain":"com.microsoft","version":1},//
     name: operator,
     attribute
   })];
@@ -140,7 +148,7 @@ export async  function createOnnxModel(test, onnx) {
     const loadedData = onnx.ModelProto.encode(model).finish();
 
     const session = await ort.InferenceSession.create(
-      loadedData, {executionProviders: [backendHint], ...{executionProviders: ['wasm']}});
+      loadedData, {executionProviders: [backendHint]});
   return  session;
 }
 
