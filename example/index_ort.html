@@ -11,7 +11,7 @@
     <!--script type="module" src="protobuf.js"></script-->
     <!--script type="module" src="onnx.js"></script-->
     <!--script src="../test/onnx.dev.js"></script-->
-    <script type="module" src="onnxdecoder.js"></script>
+    <!--script type="module" src="onnxdecoder.js"></script-->
     <script type="module">
         // import * as onnxModule from "./onnx.js";
         import * as onnxdecoder from "./onnxdecoder.js";
@@ -79,13 +79,11 @@
                 if (typeof process !== 'undefined' && process.versions && process.versions.node) {
                     // node
                     const buf = await readFile(arg);
-                    // this.initialize(buf, isOrtFormat);
                     model.load(buf);
                 } else {
                     // browser
                     const response = await fetch(arg);
                     const buf = await response.arrayBuffer();
-                    //this.initialize(new Uint8Array(buf), isOrtFormat);
                     model.load(new Uint8Array(buf));
                 }
             } else if (!ArrayBuffer.isView(arg)) {
@@ -99,8 +97,28 @@
             return model;
         }
 
+        async function generateDumpData() {
+            const session = await ort.InferenceSession.create('./dump.onnx');
+            // prepare inputs. a tensor need its corresponding TypedArray as data
+            const dataA = Float32Array.from([1, 2, 3]);
+            const dataB = Float32Array.from([10, 20, 30]);
+            const tensorA = new ort.Tensor('float32', dataA, [3]);
+            const tensorB = new ort.Tensor('float32', dataB, [3]);
+            // prepare feeds. use model input names as keys.
+            const feeds = { a: tensorA, b: tensorB };
+
+            // feed inputs and run
+            const results = await session.run(feeds);
+
+            // read from results
+            const dataC = results.output2.data;
+            console.log(dataC);
+        }
+
         async function main() {
-            // const session = new onnx.Session();
+            // Step 1: generate dump data files.
+            // await generateDumpData();
+            // Step 2: get node list, then run and compare. 
             const model = await loadModel('dump.onnx');
             const nodes = model.graph._nodes;
             for (const node of nodes) {
