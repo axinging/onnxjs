@@ -94,7 +94,7 @@
       } else {
         urls = ['https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.webgpu.min.js'];
       }
-      urls = [`./web/dist/ort.webgpu.min.js`];
+      urls = [`./web_dump/dist/ort.webgpu.min.js`];
       urls = urls.concat(['./ort-toolkit/models.js', './ort-toolkit/util.js']);
       for (let url of urls) {
         await loadScript(url);

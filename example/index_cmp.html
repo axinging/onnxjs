@@ -9,6 +9,7 @@
     <!--script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script-->
     <!--script src="../node_modules/onnxruntime-web/dist/ort.all.js"></script-->
     <script src="./web_cmp/dist/ort.all.js"></script>
+    <script src="./ort-toolkit/models.js"></script>
     <!--script type="module" src="protobuf.js"></script-->
     <!--script type="module" src="onnx.js"></script-->
     <!--script src="../test/onnx.dev.js"></script-->
@@ -32,6 +33,7 @@
             const nodePlan = { name: node.name };
             nodePlan.inputs = [];
             nodePlan.outputs = [];
+            const inputShapeDefinitions = [];
 
             for (const inputName of node.inputNames) {
                 nodePlan.inputs.push(await getDataFromJsonFile(inputName));
@@ -40,10 +42,14 @@
                 nodePlan.outputs.push(await getDataFromJsonFile(outputName));
             }
 
+            for (const input of nodePlan['inputs'])
+                inputShapeDefinitions.push((input['dims']));
+            console.log(inputShapeDefinitions);
             const graphPlan = {
                 "name": "This is comment " + node.opType,
                 "operator": node.opType,
-                "attributes": [],
+                "attributes": Array.from(node.attributes._attributes, ([name, value]) => ({ name, value })),
+                "inputShapeDefinitions": inputShapeDefinitions,
                 "cases": [
                     nodePlan,
                 ],
@@ -105,7 +111,7 @@
         }
 
         async function generateDumpData() {
-            const session = await ort.InferenceSession.create(`./${modelName}.onnx`);
+            const session = await ort.InferenceSession.create(`./ort-models/${modelName}.onnx`);
             // prepare inputs. a tensor need its corresponding TypedArray as data
             const dataA = Float32Array.from([1, 2, 3]);
             const dataB = Float32Array.from([10, 20, 30]);
@@ -126,13 +132,17 @@
             // Step 1: generate dump data files.
             // await generateDumpData();
             // Step 2: get node list, then run and compare. 
-            const model = await loadModel(`./${modelName}.onnx`);
+            const model = await loadModel(`./ort-models/${modelName}.onnx`);
             const nodes = model.graph._nodes;
             for (const node of nodes) {
                 if (node['name'] === 'n1') {
                     //continue;
                 }
                 const graphPlan = await generateGraphPlan(node);
+                for (const input of graphPlan["cases"][0]['inputs'])
+                    console.log(input['dims'])
+                for (const output of graphPlan["cases"][0]['outputs'])
+                    console.log(output['dims'])
                 const result = await runGraphPlan(graphPlan);
                 const reference = graphPlan["cases"][0]['outputs'];
                 console.log("CMP reference : " + JSON.stringify(reference));
