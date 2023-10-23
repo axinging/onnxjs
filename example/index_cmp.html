@@ -41,7 +41,8 @@
                     nodePlan.inputs.push(await getDataFromJsonFile(inputName));
                 }
              } catch (e) {
-                throw ("Not find input: " + node.name + ", "+ JSON.stringify(node));
+                console.error(("Not find input: " + node.name + ", "+ JSON.stringify(node)));
+                return null;
              } 
 
             try {
@@ -49,7 +50,8 @@
                     nodePlan.outputs.push(await getDataFromJsonFile(outputName));
                 }
              } catch (e) {
-                throw ("Not find output: " + node.name + ", "+ JSON.stringify(node));
+                console.error("Not find output: " + node.name + ", "+ JSON.stringify(node));
+                return null;
              } 
 
             for (const input of nodePlan['inputs'])
@@ -57,14 +59,17 @@
             console.log(inputShapeDefinitions);
             const attributs = [];
             node.attributes._attributes.forEach((value, key)=>{
-                    console.log(key + ", " + value);
+                    // console.log(key + ", " + value);
                     attributs.push({'name': key, 'data': value[0], 'type': value[1]});
                 }
             );
             let domain = {"domain":"com.microsoft","version":1};
-            if (node.name=== 'Conv_4' || node.name=== 'Conv_9'|| node.name=== 'Conv_14') {
+            console.log("typename name=" + node.name + ", type="+node.opType);
+            if (node.opType=== 'Add' || node.opType=== 'Conv'|| node.opType=== 'Shape'
+                || node.opType=== 'Gather'|| node.opType=== 'Unsqueeze'
+                || node.opType=== 'Concat'
+                 || node.opType === 'GlobalAveragePool') { //if (node.name=== 'Conv_4' || node.name=== 'Conv_9'|| node.name=== 'Conv_14'|| node.name=== 'Add_15'||node.name=== 'Conv_20') {
                 domain = { "domain": "", "version": 12 };
-
             }
             const graphPlan = {
                 "name": "This is comment " + node.opType,
@@ -74,7 +79,7 @@
                 "cases": [
                     nodePlan,
                 ],
-                "backend": "cpu",
+                "backend": "webgpu",
                 // "opset": { "domain": "", "version": 12 }
                 "opset": domain,
                 //"opset": [{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
@@ -154,10 +159,15 @@
                     //continue;
                 }
                 const graphPlan = await generateGraphPlan(node);
+                if (graphPlan == null) {
+                  return;
+                }
+                /*
                 for (const input of graphPlan["cases"][0]['inputs'])
                     console.log(input['dims'])
                 for (const output of graphPlan["cases"][0]['outputs'])
                     console.log(output['dims'])
+                */
                 const result1 = await runGraphPlan(graphPlan);
                 const result = Array.from(result1.output_0.cpuData);
                 const reference = graphPlan["cases"][0]['outputs'];
@@ -174,10 +184,10 @@
             const model = await loadModel(`./ort-models/${modelName}.onnx`);
             const nodes = model.graph._nodes;
             for (const node of nodes) {
-                if (node.name === 'Conv_14') {
+                //if (node.name === 'Conv_14') {
                     console.log(node);
                     await compareSingleNode(node);
-                }
+                //}
             }
         }
         main();
