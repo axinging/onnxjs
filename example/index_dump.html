@@ -153,6 +153,7 @@
         ort.env.wasm.proxy = true;
         option.freeDimensionOverrides = true;
       }
+      option.graphOptimizationLevel = "extended";
 
       if (task != 'ortProfiling') {
         const sessionCreateStartTime = performance.now();

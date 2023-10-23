@@ -8,8 +8,9 @@
     <!-- consume a single file bundle -->
     <!--script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script-->
     <!--script src="../node_modules/onnxruntime-web/dist/ort.all.js"></script-->
-    <script src="./web_cmp/dist/ort.all.js"></script>
+    <script src="./web_dump/dist/ort.all.js"></script>
     <script src="./ort-toolkit/models.js"></script>
+    <script src="./ort-toolkit/util.js"></script>
     <!--script type="module" src="protobuf.js"></script-->
     <!--script type="module" src="onnx.js"></script-->
     <!--script src="../test/onnx.dev.js"></script-->
@@ -34,28 +35,48 @@
             nodePlan.inputs = [];
             nodePlan.outputs = [];
             const inputShapeDefinitions = [];
+            console.log('node name:' + node.name);
+            try {
+                for (const inputName of node.inputNames) {
+                    nodePlan.inputs.push(await getDataFromJsonFile(inputName));
+                }
+             } catch (e) {
+                throw ("Not find input: " + node.name + ", "+ JSON.stringify(node));
+             } 
 
-            for (const inputName of node.inputNames) {
-                nodePlan.inputs.push(await getDataFromJsonFile(inputName));
-            }
-            for (const outputName of node.outputNames) {
-                nodePlan.outputs.push(await getDataFromJsonFile(outputName));
-            }
+            try {
+                for (const outputName of node.outputNames) {
+                    nodePlan.outputs.push(await getDataFromJsonFile(outputName));
+                }
+             } catch (e) {
+                throw ("Not find output: " + node.name + ", "+ JSON.stringify(node));
+             } 
 
             for (const input of nodePlan['inputs'])
                 inputShapeDefinitions.push((input['dims']));
             console.log(inputShapeDefinitions);
+            const attributs = [];
+            node.attributes._attributes.forEach((value, key)=>{
+                    console.log(key + ", " + value);
+                    attributs.push({'name': key, 'data': value[0], 'type': value[1]});
+                }
+            );
+            let domain = {"domain":"com.microsoft","version":1};
+            if (node.name=== 'Conv_4' || node.name=== 'Conv_9'|| node.name=== 'Conv_14') {
+                domain = { "domain": "", "version": 12 };
+
+            }
             const graphPlan = {
                 "name": "This is comment " + node.opType,
                 "operator": node.opType,
-                "attributes": Array.from(node.attributes._attributes, ([name, value]) => ({ name, value })),
+                "attributes": attributs,
                 "inputShapeDefinitions": inputShapeDefinitions,
                 "cases": [
                     nodePlan,
                 ],
-                "backend": "wasm",
+                "backend": "cpu",
                 // "opset": { "domain": "", "version": 12 }
-                "opset": {"domain":"com.microsoft","version":1},
+                "opset": domain,
                 //"opset": [{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
             };
 
@@ -77,7 +98,7 @@
             model.graph = onnxProto.GraphProto.create();
 
             const case0 = graphPlan["cases"][0];
-            console.log('case0 : ' + JSON.stringify(case0));
+            // console.log('case0 : ' + JSON.stringify(case0));
             // TODO: outputs maybe array.
             const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
             const result = await onnxdecoder.runProtoOpTestcase(session, case0);
@@ -128,14 +149,8 @@
             console.log(dataC);
         }
 
-        async function main() {
-            // Step 1: generate dump data files.
-            // await generateDumpData();
-            // Step 2: get node list, then run and compare. 
-            const model = await loadModel(`./ort-models/${modelName}.onnx`);
-            const nodes = model.graph._nodes;
-            for (const node of nodes) {
-                if (node['name'] === 'n1') {
+        async function compareSingleNode(node) {
+            if (node['name'] === 'n1') {
                     //continue;
                 }
                 const graphPlan = await generateGraphPlan(node);
@@ -143,10 +158,26 @@
                     console.log(input['dims'])
                 for (const output of graphPlan["cases"][0]['outputs'])
                     console.log(output['dims'])
-                const result = await runGraphPlan(graphPlan);
+                const result1 = await runGraphPlan(graphPlan);
+                const result = Array.from(result1.output_0.cpuData);
                 const reference = graphPlan["cases"][0]['outputs'];
-                console.log("CMP reference : " + JSON.stringify(reference));
-                console.log("CMP result : " + JSON.stringify(result));
+                console.log("CMP reference : " + JSON.stringify(reference[0].data[0]));
+                console.log("CMP result : " + JSON.stringify(result[0]));
+                const compareResult = compare(reference[0].data, result);
+                console.log("compareResult="+ compareResult);
+        }
+
+        async function main() {
+            // Step 1: generate dump data files.
+            // await generateDumpData();
+            // Step 2: get node list, then run and compare. 
+            const model = await loadModel(`./ort-models/${modelName}.onnx`);
+            const nodes = model.graph._nodes;
+            for (const node of nodes) {
+                if (node.name === 'Conv_14') {
+                    console.log(node);
+                    await compareSingleNode(node);
+                }
             }
         }
         main();
