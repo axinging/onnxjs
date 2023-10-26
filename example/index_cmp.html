@@ -8,7 +8,7 @@
     <!-- consume a single file bundle -->
     <!--script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script-->
     <!--script src="../node_modules/onnxruntime-web/dist/ort.all.js"></script-->
-    <script src="./web_dump/dist/ort.all.js"></script>
+    <script src="./web_cmp/dist/ort.all.js"></script>
     <script src="./ort-toolkit/models.js"></script>
     <script src="./ort-toolkit/util.js"></script>
     <!--script type="module" src="protobuf.js"></script-->
@@ -19,10 +19,11 @@
         // import * as onnxModule from "./onnx.js";
         import * as onnxdecoder from "./onnxdecoder.js";
         const onnxProto = ort.onnxProto.onnx; //onnxModule.onnx;
-        const modelName = 'mobilenetv2-12-opt';
+        const modelName = 'albert-base-v2-all';//'mobilenetv2-12-opt';
+        const deviceName = '-7779'
         async function getDataFromJsonFile(name) {
             // TODO: Fix constant node file not found.
-            const response = await fetch(`./modeldata/${modelName}/` + name + ".json");
+            const response = await fetch(`./modeldata/${modelName}${deviceName}/` + name + ".json");
             const json = await response.json();
             if (json.type === 'float') {
                 json.type = 'float32';
@@ -30,56 +31,72 @@
             return json;
         }
 
+        BigInt.prototype.toJSON = function () {
+            return Number(this.toString());
+        };
+
         async function generateGraphPlan(node) {
             const nodePlan = { name: node.name };
             nodePlan.inputs = [];
             nodePlan.outputs = [];
             const inputShapeDefinitions = [];
             console.log('node name:' + node.name);
+
             try {
                 for (const inputName of node.inputNames) {
-                    nodePlan.inputs.push(await getDataFromJsonFile(inputName));
+                    nodePlan.inputs.push(await getDataFromJsonFile(inputName.replace(/\//g, '_').replace(/:/g, '_')));
                 }
-             } catch (e) {
-                console.error(("Not find input: " + node.name + ", "+ JSON.stringify(node)));
+            } catch (e) {
+                console.error(("Not find input: " + node.name + ", " + JSON.stringify(node)));
                 return null;
-             } 
+            }
 
             try {
                 for (const outputName of node.outputNames) {
-                    nodePlan.outputs.push(await getDataFromJsonFile(outputName));
+                    nodePlan.outputs.push(await getDataFromJsonFile(outputName.replace(/\//g, '_').replace(/:/g, '_')));
                 }
-             } catch (e) {
-                console.error("Not find output: " + node.name + ", "+ JSON.stringify(node));
+            } catch (e) {
+                console.error("Not find output: " + node.name + ", " + JSON.stringify(node));
                 return null;
-             } 
+            }
 
             for (const input of nodePlan['inputs'])
                 inputShapeDefinitions.push((input['dims']));
             console.log(inputShapeDefinitions);
             const attributs = [];
-            node.attributes._attributes.forEach((value, key)=>{
-                    // console.log(key + ", " + value);
-                    attributs.push({'name': key, 'data': value[0], 'type': value[1]});
-                }
+            node.attributes._attributes.forEach((value, key) => {
+                console.log(key + ", " + value);
+                attributs.push({ 'name': key, 'data': value[0], 'type': value[1] });
+            }
             );
-            let domain = {"domain":"com.microsoft","version":1};
-            console.log("typename name=" + node.name + ", type="+node.opType);
-            if (node.opType=== 'Add' || node.opType=== 'Conv'|| node.opType=== 'Shape'
-                || node.opType=== 'Gather'|| node.opType=== 'Unsqueeze'
-                || node.opType=== 'Concat'
-                 || node.opType === 'GlobalAveragePool') { //if (node.name=== 'Conv_4' || node.name=== 'Conv_9'|| node.name=== 'Conv_14'|| node.name=== 'Add_15'||node.name=== 'Conv_20') {
+            let domain = { "domain": "com.microsoft", "version": 1 };
+            console.log("typename name=" + node.name + ", type=" + node.opType);
+            if (node.opType === 'Add' || node.opType === 'Conv' || node.opType === 'Shape'
+                || node.opType === 'Reshape'
+                || node.opType === 'Gather' || node.opType === 'Unsqueeze'
+                || node.opType === 'Concat'
+                || node.opType === 'GlobalAveragePool'
+                || node.opType === 'Slice'
+                || node.opType === 'Cast'
+                || node.opType === 'Softmax'
+                || node.opType === 'MatMul'
+                || node.opType === 'Sub'
+                || node.opType === 'Mul'
+                || node.opType === 'Add'
+                || node.opType === 'Div'
+                || node.opType === 'LayerNormalization'
+                || node.opType === 'Transpose') { //if (node.name=== 'Conv_4' || node.name=== 'Conv_9'|| node.name=== 'Conv_14'|| node.name=== 'Add_15'||node.name=== 'Conv_20') {
                 domain = { "domain": "", "version": 12 };
             }
             const graphPlan = {
-                "name": "This is comment " + node.opType,
+                "name": node.opType,
                 "operator": node.opType,
                 "attributes": attributs,
                 "inputShapeDefinitions": inputShapeDefinitions,
                 "cases": [
                     nodePlan,
                 ],
-                "backend": "webgpu",
+                "backend": "wasm",
                 // "opset": { "domain": "", "version": 12 }
                 "opset": domain,
                 //"opset": [{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
@@ -95,11 +112,11 @@
             const model = onnxProto.ModelProto.create();
             model.irVersion = onnxProto.Version.IR_VERSION;
             // model.opsetImport.push(opsetImport);
-            model.opsetImport =   [{"domain":"","version":12},
-                        {"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},
-                        {"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},
-                        {"domain":"ai.onnx.preview.training","version":1},
-                        {"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}];
+            model.opsetImport = [{ "domain": "", "version": 12 },
+            { "domain": "com.microsoft.nchwc", "version": 1 }, { "domain": "ai.onnx.ml", "version": 3 },
+            { "domain": "com.ms.internal.nhwc", "version": 19 }, { "domain": "ai.onnx.training", "version": 1 },
+            { "domain": "ai.onnx.preview.training", "version": 1 },
+            { "domain": "com.microsoft", "version": 1 }, { "domain": "com.microsoft.experimental", "version": 1 }, { "domain": "org.pytorch.aten", "version": 1 }];
             model.graph = onnxProto.GraphProto.create();
 
             const case0 = graphPlan["cases"][0];
@@ -154,27 +171,39 @@
             console.log(dataC);
         }
 
+        function convertArrayToBigInt64Array (array) {
+            const bigint64array = new BigInt64Array(array.length);
+            for (var i = 0; i < array.length; i++) {
+                bigint64array[i] = BigInt(array[i]);
+            }
+            return bigint64array;
+        }
+
+        function compareIgnoreType (reference, result, isResultInt64) {
+            const referenceInt64 = isResultInt64 ? convertArrayToBigInt64Array(reference) : reference;
+            if (isResultInt64) {
+                return (JSON.stringify(referenceInt64.sort()) === JSON.stringify(result.sort()));
+            }
+            return compare(referenceInt64, Array.from(result));
+        }
+
         async function compareSingleNode(node) {
-            if (node['name'] === 'n1') {
-                    //continue;
-                }
-                const graphPlan = await generateGraphPlan(node);
-                if (graphPlan == null) {
-                  return;
-                }
-                /*
-                for (const input of graphPlan["cases"][0]['inputs'])
-                    console.log(input['dims'])
-                for (const output of graphPlan["cases"][0]['outputs'])
-                    console.log(output['dims'])
-                */
-                const result1 = await runGraphPlan(graphPlan);
-                const result = Array.from(result1.output_0.cpuData);
-                const reference = graphPlan["cases"][0]['outputs'];
-                console.log("CMP reference : " + JSON.stringify(reference[0].data[0]));
-                console.log("CMP result : " + JSON.stringify(result[0]));
-                const compareResult = compare(reference[0].data, result);
-                console.log("compareResult="+ compareResult);
+            const graphPlan = await generateGraphPlan(node);
+            if (graphPlan == null) {
+                return;
+            }
+            const result1 = await runGraphPlan(graphPlan);
+            const result = Array.from(result1.output_0.cpuData);
+            const isResultInt64 = result1.output_0.cpuData instanceof BigInt64Array;
+            let reference = graphPlan["cases"][0]['outputs'][0].data;
+            const compareResult = compareIgnoreType(reference, result1.output_0.cpuData, isResultInt64);
+            if (compareResult)
+                console.log("Wasm vs " + graphPlan["backend"] + ", compare result=" + compareResult);
+            else {
+                console.log("CMP reference : " + JSON.stringify(reference));
+                console.log("CMP result : " + JSON.stringify(result1.output_0.cpuData));
+                console.error("Wasm vs " + graphPlan["backend"] + ", compare result=" + compareResult + ", failed node: " + graphPlan["name"]);
+            }
         }
 
         async function main() {
@@ -184,9 +213,10 @@
             const model = await loadModel(`./ort-models/${modelName}.onnx`);
             const nodes = model.graph._nodes;
             for (const node of nodes) {
-                //if (node.name === 'Conv_14') {
-                    console.log(node);
-                    await compareSingleNode(node);
+                //if (node.name === 'Shape_98') {
+                //console.log(node);
+                await compareSingleNode(node);
+                //console.log("end!");
                 //}
             }
         }

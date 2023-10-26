@@ -50,7 +50,7 @@
     const disableBuffer = getParam('disableBuffer') === 'true' || true;
     const ep = getParam('ep') || 'webgpu';
     const layout = getParam('layout') || 'NHWC';
-    const modelName = getParam('modelName') || 'mobilenetv2-12-opt';// 'albert-base-v2';// 'mobilenetv2-12';
+    const modelName = getParam('modelName') || 'mobilenetv2-12-extended'; //|| 'albert-base-v2-all';
     let modelUrl = getParam('modelUrl') || 'server';
     if (modelUrl === 'hf') {
       modelUrl = `https://huggingface.co/webatintel/ort-models/resolve/main/${modelName}.onnx`;
@@ -61,7 +61,7 @@
     const ortUrl = getParam('ortUrl');
     let runTimes = getParam('runTimes') || 3;
     runTimes = parseInt(runTimes);
-    const tasks = getParam('tasks') || 'dump';//'conformance';
+    const tasks = getParam('tasks') || 'dump';
     const updateModel = getParam('updateModel') === 'true' || false;
     let warmupTimes = getParam('warmupTimes') || 10;
     warmupTimes = parseInt(warmupTimes);
@@ -94,7 +94,13 @@
       } else {
         urls = ['https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.webgpu.min.js'];
       }
-      urls = [`./web_dump/dist/ort.webgpu.min.js`];
+      let binary = 'cmp';
+      for (let task of tasks.split(',')) {
+        if (task === 'dump') { 
+          binary = 'dump';
+        }
+      }
+      urls = [`./web_${binary}/dist/ort.webgpu.min.js`];
       urls = urls.concat(['./ort-toolkit/models.js', './ort-toolkit/util.js']);
       for (let url of urls) {
         await loadScript(url);
@@ -153,6 +159,7 @@
         ort.env.wasm.proxy = true;
         option.freeDimensionOverrides = true;
       }
+      // option.graphOptimizationLevel = "all";
       option.graphOptimizationLevel = "extended";
 
       if (task != 'ortProfiling') {

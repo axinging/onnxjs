@@ -1,6 +1,8 @@
 const models = {
   // daily test
   'albert-base-v2': 'bert64', // tjs/albert-base-v2/onnx/model.onnx. TODO: NaN
+  'albert-base-v2-extended': 'bert64', // tjs/albert-base-v2/onnx/model.onnx. TODO: NaN
+  'albert-base-v2-all': 'bert64', // tjs/albert-base-v2/onnx/model.onnx. TODO: NaN
   'bart-large-cnn-encoder': 'bert64', // tjs/facebook/bart-large-cnn/onnx/encoder_model.onnx
   'bert-base-cased': 'bert64', // tjs/bert-base-cased/onnx/model.onnx
   'bert-base-uncased': 'bert64', // tjs/bert-base-uncased/onnx/model.onnx
@@ -16,7 +18,7 @@ const models = {
   'gpt2': 'llm-decoder', // tjs/gpt2/onnx/decoder_model_merged.onnx. TODO: NaN
 
   'mobilenetv2-12': 'img224', // from teams
-  'mobilenetv2-12-opt': 'img224', // from teams
+  'mobilenetv2-12-extended': 'img224', // from teams
   'resnet50-v2-7': 'img224', // webnn
 
   /*

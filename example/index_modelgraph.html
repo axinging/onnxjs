@@ -56,8 +56,10 @@
             // Step 1: generate dump data files.
             // await generateDumpData();
             // Step 2: get node list, then run and compare. 
-            const model = await loadModel('./ort-models/mobilenetv2-12-opt.onnx');
-            await SaveObjectsToFile(model, 'mobilenetv2-12-opt.json')
+            // const modelName = 'albert-base-v2-all';
+            const modelName = 'mobilenetv2-12';
+            const model = await loadModel(`./ort-models/${modelName}.onnx`);
+            await SaveObjectsToFile(model, `${modelName}.json`)
             const nodes = model.graph._nodes;
         }
         main();
