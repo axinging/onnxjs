@@ -35,6 +35,17 @@
             return Number(this.toString());
         };
 
+        function getParam(name) {
+            name = name.replace(/[\[\]]/g, '\\$&');
+            let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
+            let results = regex.exec(window.location.href);
+            if (!results)
+                return null;
+            if (!results[2])
+                return '';
+            return decodeURIComponent(results[2].replace(/\+/g, ' '));
+        }
+
         async function generateGraphPlan(node) {
             const nodePlan = { name: node.name };
             nodePlan.inputs = [];
@@ -96,7 +107,7 @@
                 "cases": [
                     nodePlan,
                 ],
-                "backend": "wasm",
+                "backend": getParam('ep') || 'wasm',
                 // "opset": { "domain": "", "version": 12 }
                 "opset": domain,
                 //"opset": [{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
@@ -152,7 +163,7 @@
             }
             return model;
         }
-
+        // /albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul
         async function generateDumpData() {
             const session = await ort.InferenceSession.create(`./ort-models/${modelName}.onnx`);
             // prepare inputs. a tensor need its corresponding TypedArray as data
@@ -171,7 +182,7 @@
             console.log(dataC);
         }
 
-        function convertArrayToBigInt64Array (array) {
+        function convertArrayToBigInt64Array(array) {
             const bigint64array = new BigInt64Array(array.length);
             for (var i = 0; i < array.length; i++) {
                 bigint64array[i] = BigInt(array[i]);
@@ -179,7 +190,8 @@
             return bigint64array;
         }
 
-        function compareIgnoreType (reference, result, isResultInt64) {
+        function compareIgnoreType(reference, result) {
+            const isResultInt64 = result instanceof BigInt64Array;
             const referenceInt64 = isResultInt64 ? convertArrayToBigInt64Array(reference) : reference;
             if (isResultInt64) {
                 return (JSON.stringify(referenceInt64.sort()) === JSON.stringify(result.sort()));
@@ -193,16 +205,17 @@
                 return;
             }
             const result1 = await runGraphPlan(graphPlan);
-            const result = Array.from(result1.output_0.cpuData);
-            const isResultInt64 = result1.output_0.cpuData instanceof BigInt64Array;
             let reference = graphPlan["cases"][0]['outputs'][0].data;
-            const compareResult = compareIgnoreType(reference, result1.output_0.cpuData, isResultInt64);
+            const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
             if (compareResult)
                 console.log("Wasm vs " + graphPlan["backend"] + ", compare result=" + compareResult);
             else {
                 console.log("CMP reference : " + JSON.stringify(reference));
-                console.log("CMP result : " + JSON.stringify(result1.output_0.cpuData));
-                console.error("Wasm vs " + graphPlan["backend"] + ", compare result=" + compareResult + ", failed node: " + graphPlan["name"]);
+                console.log("CMP result : " + JSON.stringify(Array.from(result1.output_0.cpuData)));
+                console.error("Wasm vs " + graphPlan["backend"] + ", compare result=" +
+                    compareResult + ", failed node: " + graphPlan["name"] + ", " + graphPlan["cases"][0]["name"]
+                    + ", inputShapeDefinitions = " + graphPlan["inputShapeDefinitions"]);
+                console.error(graphPlan["inputShapeDefinitions"]);
             }
         }
 
@@ -212,13 +225,22 @@
             // Step 2: get node list, then run and compare. 
             const model = await loadModel(`./ort-models/${modelName}.onnx`);
             const nodes = model.graph._nodes;
-            for (const node of nodes) {
-                //if (node.name === 'Shape_98') {
-                //console.log(node);
-                await compareSingleNode(node);
-                //console.log("end!");
-                //}
+            const testNode = getParam("node");
+            // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
+            if (testNode) {
+                for (const node of nodes) {
+                    if (testNode && node.name === testNode) {
+                        console.log(node.name);
+                        await compareSingleNode(node);
+                        break;
+                    }
+                }
+            } else {
+                for (const node of nodes) {
+                    await compareSingleNode(node);
+                }
             }
+
         }
         main();
     </script>
