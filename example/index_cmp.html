@@ -18,7 +18,7 @@
     <script type="module">
         // import * as onnxModule from "./onnx.js";
         import * as onnxdecoder from "./onnxdecoder.js";
-        const onnxProto = ort.onnxProto.onnx; //onnxModule.onnx;
+        const onnxProto = ort.OnnxProto.onnx; //onnxModule.onnx;
         const modelName = 'albert-base-v2-all';//'mobilenetv2-12-opt';
         const deviceName = '-7779'
         async function getDataFromJsonFile(name) {
