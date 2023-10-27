@@ -51,14 +51,13 @@
             nodePlan.inputs = [];
             nodePlan.outputs = [];
             const inputShapeDefinitions = [];
-            console.log('node name:' + node.name);
 
             try {
                 for (const inputName of node.inputNames) {
                     nodePlan.inputs.push(await getDataFromJsonFile(inputName.replace(/\//g, '_').replace(/:/g, '_')));
                 }
             } catch (e) {
-                console.error(("Not find input: " + node.name + ", " + JSON.stringify(node)));
+                console.error(("Can not find input: " + node.name + ", " + JSON.stringify(node)));
                 return null;
             }
 
@@ -67,13 +66,12 @@
                     nodePlan.outputs.push(await getDataFromJsonFile(outputName.replace(/\//g, '_').replace(/:/g, '_')));
                 }
             } catch (e) {
-                console.error("Not find output: " + node.name + ", " + JSON.stringify(node));
+                console.error("Can not find output: " + node.name + ", " + JSON.stringify(node));
                 return null;
             }
 
             for (const input of nodePlan['inputs'])
                 inputShapeDefinitions.push((input['dims']));
-            console.log(inputShapeDefinitions);
             const attributs = [];
             node.attributes._attributes.forEach((value, key) => {
                 console.log(key + ", " + value);
@@ -81,10 +79,12 @@
             }
             );
             let domain = { "domain": "com.microsoft", "version": 1 };
-            console.log("typename name=" + node.name + ", type=" + node.opType);
-            if (node.opType === 'Add' || node.opType === 'Conv' || node.opType === 'Shape'
+            if (node.opType === 'Add'
+                || node.opType === 'Conv'
+                || node.opType === 'Shape'
                 || node.opType === 'Reshape'
-                || node.opType === 'Gather' || node.opType === 'Unsqueeze'
+                || node.opType === 'Gather'
+                || node.opType === 'Unsqueeze'
                 || node.opType === 'Concat'
                 || node.opType === 'GlobalAveragePool'
                 || node.opType === 'Slice'
@@ -96,7 +96,7 @@
                 || node.opType === 'Add'
                 || node.opType === 'Div'
                 || node.opType === 'LayerNormalization'
-                || node.opType === 'Transpose') { //if (node.name=== 'Conv_4' || node.name=== 'Conv_9'|| node.name=== 'Conv_14'|| node.name=== 'Add_15'||node.name=== 'Conv_20') {
+                || node.opType === 'Transpose') {
                 domain = { "domain": "", "version": 12 };
             }
             const graphPlan = {
@@ -117,8 +117,8 @@
         }
 
         async function runGraphPlan(graphPlan) {
-            ort.env.debug = true
-            ort.env.logLevel = 'verbose';
+            //ort.env.debug = true
+            //ort.env.logLevel = 'verbose';
 
             const model = onnxProto.ModelProto.create();
             model.irVersion = onnxProto.Version.IR_VERSION;
@@ -208,14 +208,13 @@
             let reference = graphPlan["cases"][0]['outputs'][0].data;
             const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
             if (compareResult)
-                console.log("Wasm vs " + graphPlan["backend"] + ", compare result=" + compareResult);
+                console.log("Wasm vs " + graphPlan["backend"] + ", compare result=" + compareResult + ","+ graphPlan["name"] + ", " + graphPlan["cases"][0]["name"]);
             else {
                 console.log("CMP reference : " + JSON.stringify(reference));
                 console.log("CMP result : " + JSON.stringify(Array.from(result1.output_0.cpuData)));
                 console.error("Wasm vs " + graphPlan["backend"] + ", compare result=" +
                     compareResult + ", failed node: " + graphPlan["name"] + ", " + graphPlan["cases"][0]["name"]
-                    + ", inputShapeDefinitions = " + graphPlan["inputShapeDefinitions"]);
-                console.error(graphPlan["inputShapeDefinitions"]);
+                    + ", inputShapeDefinitions = " + JSON.stringify(graphPlan["inputShapeDefinitions"]));
             }
         }
 
@@ -230,7 +229,6 @@
             if (testNode) {
                 for (const node of nodes) {
                     if (testNode && node.name === testNode) {
-                        console.log(node.name);
                         await compareSingleNode(node);
                         break;
                     }
@@ -240,7 +238,6 @@
                     await compareSingleNode(node);
                 }
             }
-
         }
         main();
     </script>

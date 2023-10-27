@@ -8,24 +8,14 @@
     <!-- consume a single file bundle -->
     <!--script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script-->
     <!--script src="../node_modules/onnxruntime-web/dist/ort.all.js"></script-->
-    <script src="./web_cmp/dist/ort.all.js"></script>
+    <script src="./web_dump/dist/ort.all.js"></script>
+    <script  type="module" src="dump_util.js"></script>
     <!--script type="module" src="protobuf.js"></script-->
     <!--script type="module" src="onnx.js"></script-->
     <!--script src="../test/onnx.dev.js"></script-->
     <!--script type="module" src="onnxdecoder.js"></script-->
     <script type="module">
-         function SaveObjectsToFile(json_object, name) {
-          // const name = json_object['name'];
-          const object = json_object;
-          const file_name = `${name}.json`;
-          const a = document.createElement('a');
-          const file = new Blob([JSON.stringify(object)], {
-            type: 'application/json'
-          });
-          a.href = URL.createObjectURL(file);
-          a.download = file_name;
-          a.click();
-        }
+        import * as dump_util from "./dump_util.js"
         async function loadModel(arg, byteOffset, length) {
             // const model = new onnx.Model();
             const model = new ort.Model();
@@ -52,15 +42,19 @@
             return model;
         }
 
+
+
         async function main() {
             // Step 1: generate dump data files.
             // await generateDumpData();
             // Step 2: get node list, then run and compare. 
-            // const modelName = 'albert-base-v2-all';
-            const modelName = 'mobilenetv2-12';
-            const model = await loadModel(`./ort-models/${modelName}.onnx`);
-            await SaveObjectsToFile(model, `${modelName}.json`)
+            const modelName = 'albert-base-v2-all';
+            //const modelName = 'mobilenetv2-12-extended';
+            const modelUrl = `./ort-models/${modelName}.onnx`;
+            const model = await loadModel(modelUrl);
+            await dump_util.saveObjectsToFile(model, `${modelName}.json`)
             const nodes = model.graph._nodes;
+            await dump_util.downloadWeights(modelUrl);
         }
         main();
     </script>
