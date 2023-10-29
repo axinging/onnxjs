@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+    <header>
+        <title>ONNX Runtime JavaScript examples: Quick Start - Web (using bundler)</title>
+    </header>
+    <body>
+        <!-- consume a single file bundle -->
+        <script src="./web_cmp/dist/ort.all.js"></script>
+        <script>
+        async function main() {
+            const modelDir = './ort-models/';
+            const modelName = 'albert-base-v2';
+            const graphOptimizationLevel = 'all';
+            const modelOptName = modelName +"-"+ graphOptimizationLevel + ".onnx";
+            const optimizedModelFilePath = modelDir + modelOptName;
+            let session;
+
+            try {
+                // create a new session and load the specific model.
+                //
+                // the model in this example contains a single MatMul node
+                // it has 2 inputs: 'a'(float32, 3x4) and 'b'(float32, 4x3)
+                // it has 1 output: 'c'(float32, 3x3)
+                const option = {
+                    executionProviders: [
+                    {
+                        name: 'wasm',
+                    },
+                    ],
+                    graphOptimizationLevel: graphOptimizationLevel,
+                    optimizedModelFilePath: optimizedModelFilePath,
+                };
+                session = await ort.InferenceSession.create(modelDir + modelName + ".onnx",option);
+
+            } catch (e) {
+                console.error(`failed to inference ONNX model: ${e}.`);
+            }
+        }
+
+        main();
+        </script>
+    </body>
+</html>
