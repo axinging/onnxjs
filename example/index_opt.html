@@ -5,11 +5,38 @@
     </header>
     <body>
         <!-- consume a single file bundle -->
-        <script src="./web_cmp/dist/ort.all.js"></script>
-        <script>
-        async function main() {
+        <script src="./web_dump/dist/ort.all.js"></script>
+        <script type="module">
+        import * as dump_util from "./dump_util.js"
+        async function loadModel(arg, byteOffset, length) {
+            // const model = new onnx.Model();
+            const model = new ort.Model();
+            if (typeof arg === 'string') {
+                const isOrtFormat = arg.endsWith('.ort');
+                if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+                    // node
+                    const buf = await readFile(arg);
+                    model.load(buf);
+                } else {
+                    // browser
+                    const response = await fetch(arg);
+                    const buf = await response.arrayBuffer();
+                    model.load(new Uint8Array(buf));
+                }
+            } else if (!ArrayBuffer.isView(arg)) {
+                // load model from ArrayBuffer
+                const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
+                //this.initialize(arr);
+                model.load(arr);
+            } else {
+                model.load(arg);
+            }
+            return model;
+        }
+
+        async function getOptimizedModel() {
             const modelDir = './ort-models/';
-            const modelName = 'albert-base-v2';
+            const modelName = 'mobilenetv2-12';// 'albert-base-v2';
             const graphOptimizationLevel = 'all';
             const modelOptName = modelName +"-"+ graphOptimizationLevel + ".onnx";
             const optimizedModelFilePath = modelDir + modelOptName;
@@ -31,10 +58,24 @@
                     optimizedModelFilePath: optimizedModelFilePath,
                 };
                 session = await ort.InferenceSession.create(modelDir + modelName + ".onnx",option);
+                console.log("END");
 
             } catch (e) {
                 console.error(`failed to inference ONNX model: ${e}.`);
             }
+
+            console.log(window.optmizedModelBlobUrl);
+            let response = await fetch(window.optmizedModelBlobUrl);
+            const blob = await response.blob();
+            console.log(blob);
+            const arr = new Uint8Array(await blob.arrayBuffer());
+            const model = await loadModel(arr);
+            return model;
+        }
+
+        async function main() {
+            const model = await getOptimizedModel();
+            await dump_util.saveObjectsToFile(model, `test.json`)
         }
 
         main();

@@ -49,10 +49,11 @@
   <script type="module">
     'use strict';
     import * as dump_util from "./dump_util.js"
+    //import {} from from "./dump_util.js"
     const disableBuffer = getParam('disableBuffer') === 'true' || true;
     const ep = getParam('ep') || 'webgpu';
     const layout = getParam('layout') || 'NHWC';
-    const modelName = getParam('modelName') || 'albert-base-v2-all'; //'mobilenetv2-12-extended'
+    const modelName = getParam('modelName') || 'mobilenetv2-12';//'albert-base-v2-all';
     let modelUrl = getParam('modelUrl') || 'server';
     if (modelUrl === 'hf') {
       modelUrl = `https://huggingface.co/webatintel/ort-models/resolve/main/${modelName}.onnx`;
@@ -61,11 +62,11 @@
     }
     modelUrl = `ort-models/${modelName}.onnx`;
     const ortUrl = getParam('ortUrl');
-    let runTimes = getParam('runTimes') || 3;
+    let runTimes = getParam('runTimes') || 1;
     runTimes = parseInt(runTimes);
     const tasks = getParam('tasks') || 'dump';
     const updateModel = getParam('updateModel') === 'true' || false;
-    let warmupTimes = getParam('warmupTimes') || 10;
+    let warmupTimes = getParam('warmupTimes') || 0;
     warmupTimes = parseInt(warmupTimes);
     const wasmThreads = parseInt(getParam('wasmThreads')) || 1;
 
@@ -89,7 +90,7 @@
     const unitConversionFactor = 1000000;
     let feeds;
 
-    async function main() {
+    async function loadScript2() {
       let urls;
       if (ortUrl) {
         urls = [`${ortUrl}/js/web/dist/ort.webgpu.min.js`];
@@ -98,7 +99,7 @@
       }
       let binary = 'cmp';
       for (let task of tasks.split(',')) {
-        if (task === 'dump') { 
+        if (task === 'dump') {
           binary = 'dump';
         }
       }
@@ -108,12 +109,25 @@
         await loadScript(url);
       }
 
+    }
+
+    // Get the input put data.
+    async function addDumpData(blobUrlMap, dumpDataMap) {
+      for (const [key, value] of blobUrlMap.entries()) {
+        let response = await fetch(key);
+        const blob = await response.blob();
+        console.log(blob);
+        const arr = new Uint8Array(await blob.arrayBuffer());
+        dumpDataMap.set(key, arr);
+      }
+      return dumpDataMap;
+    }
+
+    async function main() {
+      await loadScript2();
       for (let task of tasks.split(',')) {
         if (task === 'dump') {
-          await dump_util.downloadWeights(modelUrl);
-          runTimes = 1;
-          warmupTimes = 0;
-          await runTask('performance', 'wasm');
+          await dump_util.dump(modelName, runTask);
         } else if (task === 'conformance') {
           let epOutput = await runTask('conformance', ep);
           let cpuOutput = await runTask('conformance', 'wasm');

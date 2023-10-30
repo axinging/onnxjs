@@ -1,6 +1,7 @@
-import Long from "https://cdn.jsdelivr.net/npm/long@5.2.3/index.js";
+import Long from 'https://cdn.jsdelivr.net/npm/long@5.2.3/index.js';
+import * as onnxdecoder from './onnxdecoder.js';
 
-const onnx = ort.OnnxProto.onnx; //onnxModule.onnx;
+const onnx = ort.OnnxProto.onnx;  // onnxModule.onnx;
 
 function sleep(ms) {
   let start = new Date().getTime();
@@ -10,17 +11,63 @@ function sleep(ms) {
   return;
 }
 
-export function saveObjectsToFile(json_object, name) {
+export function writeObjectToFile(json_object, name, time = 100) {
   // const name = json_object['name'];
-  const object = json_object;
-  const file_name = `${name}.json`;
+  let object = json_object;
+  const file_name = name;  // `${name}.json`;
   const a = document.createElement('a');
+  if (object instanceof Map) {
+    object = Object.fromEntries(object);
+  }
   const file = new Blob([JSON.stringify(object)], {type: 'application/json'});
   a.href = URL.createObjectURL(file);
   a.download = file_name;
   a.click();
-  sleep(100);
+  sleep(time);
 }
+
+export function writeObjectToFile2(json_object, name, time = 100) {
+  // const name = json_object['name'];
+  let object = json_object;
+  const file_name = name;  // `${name}.json`;
+  const a = document.createElement('a');
+  if (object instanceof Map) {
+    object = Object.fromEntries(object);
+  }
+  const file = new Blob([object], {type: 'application/json'});
+  a.href = URL.createObjectURL(file);
+  a.download = file_name;
+  a.click();
+  sleep(time);
+}
+
+export async function readObjectFromJson(fileUrl) {
+  const response = await fetch(fileUrl);
+  // const blob = await response.blob();
+  let blobObject;
+  try {
+    blobObject = await response.json();  // JSON.parse(await blob.text());
+  } catch (err) {
+    console.error(err);
+  }
+
+  //
+  try {
+    const text = await response.text();
+    console.log(JSON.parse(text));
+  } catch (err) {
+    console.error(err);
+  }
+  return blobObject;
+}
+
+export async function readObjectFromFile(fileUrl) {
+  const response = await fetch(fileUrl);
+  const blob = await response.blob();
+  const blobObject = JSON.parse(await blob.text());
+  return blobObject;
+}
+
 
 function tensorDimsFromProto(dims) {
   // get rid of Long type for dims
@@ -64,6 +111,7 @@ function tensorDataTypeFromProto(typeProto) {
   }
 }
 
+
 export async function downloadWeights(arg) {
   const response = await fetch(arg);
   const buf = await response.arrayBuffer();
@@ -74,8 +122,426 @@ export async function downloadWeights(arg) {
       'dims': tensorDimsFromProto(i.dims),
       'type': tensorDataTypeFromProto(i.dataType),
     };
-    console.log(i.name + "," + tensorDataTypeFromProto(i.dataType));
+    console.log(i.name + ',' + tensorDataTypeFromProto(i.dataType));
     const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
-    await saveObjectsToFile(tensor, regName)
+    writeObjectToFile(tensor, regName + '.json');
   }
+}
+
+
+export async function addWeights(map, arg) {
+  const response = await fetch(arg);
+  const buf = await response.arrayBuffer();
+  const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
+  for (const i of modelProto.graph.initializer) {
+    const tensor = {
+      'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
+      'dims': tensorDimsFromProto(i.dims),
+      'type': tensorDataTypeFromProto(i.dataType),
+    };
+    console.log(i.name + ',' + tensorDataTypeFromProto(i.dataType));
+    const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
+    // writeObjectToFile(tensor, regName);
+    map.set(name, tensor);
+    ;
+  }
+}
+
+
+export async function getOptimizedModel(modelName, save = false) {
+  const modelDir = './ort-models/';
+  // const modelName = 'albert-base-v2';
+  const graphOptimizationLevel = 'all';
+  const optmizedModelName = modelName + '-' + graphOptimizationLevel + '.onnx';
+  const optimizedModelFilePath = modelDir + optmizedModelName;
+  let session;
+
+  try {
+    // create a new session and load the specific model.
+    //
+    // the model in this example contains a single MatMul node
+    // it has 2 inputs: 'a'(float32, 3x4) and 'b'(float32, 4x3)
+    // it has 1 output: 'c'(float32, 3x3)
+    const option = {
+      executionProviders: [
+        {
+          name: 'wasm',
+        },
+      ],
+      graphOptimizationLevel: graphOptimizationLevel,
+      optimizedModelFilePath: optimizedModelFilePath,
+    };
+    session = await ort.InferenceSession.create(
+        modelDir + modelName + '.onnx', option);
+    console.log('END');
+
+  } catch (e) {
+    console.error(`failed to inference ONNX model: ${e}.`);
+  }
+
+  console.log(window.optmizedModelBlobUrl);
+  // let blob = await fetch(window.optmizedModelBlobUrl).then(r => r.blob());
+  // console.log(blob);
+  const response = await fetch(window.optmizedModelBlobUrl);
+  const blob = await response.blob();
+  const arr = new Uint8Array(await blob.arrayBuffer());
+  if (save) {
+    // var file = new File([blob], optmizedModelName);
+    // writeObjectToFile(arr, optmizedModelName);
+  }
+  // const model = await loadModel(arr);
+  // return model;
+  return arr;
+}
+
+
+export class OnnxDumpData {
+  constructor(modelName) {
+    this.dumpDataMap = new Map();
+    this.modelName = modelName;
+  }
+
+  async addWeights(optimizedModelBuffer) {
+    // const response = await fetch(modelUrl);
+    // const buf = await response.arrayBuffer();
+    const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
+    for (const i of modelProto.graph.initializer) {
+      const tensor = {
+        'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
+        'dims': tensorDimsFromProto(i.dims),
+        'type': tensorDataTypeFromProto(i.dataType),
+      };
+      const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
+      // writeObjectToFile(tensor, regName);
+      this.dumpDataMap.set(regName, tensor);
+      ;
+    }
+  }
+
+  // Get the input put data.
+  async addInputOutput(blobUrlMap) {
+    for (const [key, value] of blobUrlMap.entries()) {
+      // let response = await fetch(value);
+      // const blob = await response.blob();
+      // const blobObject = JSON.parse(await blob.text());
+      const blobObject = await readObjectFromFile(value);
+      // const arr = new Uint8Array(await blob.arrayBuffer());
+      this.dumpDataMap.set(key, blobObject);
+    }
+  }
+
+  save() {
+    writeObjectToFile(this.dumpDataMap, this.modelName + '-inputoutput.json');
+    return this.modelName + '-inputoutput';
+  }
+
+  getDumpData() {
+    return this.dumpDataMap;
+  }
+}
+
+
+export async function readObjectFromJson2(fileUrl) {
+  /*
+  const response = await fetch(fileUrl);
+  //const blob = await response.blob();
+  let blobObject;
+  try {
+      blobObject = await response.text();
+      blobObject = (JSON.parse(blobObject));
+  } catch (err) {
+      console.error(err);
+  }
+  return blobObject;*/
+  let response = await fetch(fileUrl);
+  const blob = await response.blob();
+  // console.log(blob);
+  const arr = new Uint8Array(await blob.arrayBuffer());
+  return arr;
+}
+
+// Compare related tools
+// import * as onnxModule from "./onnx.js";
+
+const onnxProto = ort.OnnxProto.onnx;  // onnxModule.onnx;
+// const modelName = 'albert-base-v2-all';//'mobilenetv2-12-opt';
+const deviceName = '-7779'
+async function getDataFromJsonFile(name) {
+  const modelName = 'albert-base-v2-all';
+  console.error('Error! ');
+  // TODO: Fix constant node file not found.
+  const response =
+      await fetch(`./modeldata/${modelName}${deviceName}/` + name + '.json');
+  const json = await response.json();
+  if (json.type === 'float') {
+    json.type = 'float32';
+  }
+  return json;
+}
+
+BigInt.prototype.toJSON = function() {
+  return Number(this.toString());
+};
+
+function getParam(name) {
+  name = name.replace(/[\[\]]/g, '\\$&');
+  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
+  let results = regex.exec(window.location.href);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g, ' '));
+}
+
+async function generateGraphPlan(node, dumpDataMap) {
+  const nodePlan = {name: node.name};
+  nodePlan.inputs = [];
+  nodePlan.outputs = [];
+  const inputShapeDefinitions = [];
+  const isMap = dumpDataMap instanceof Map;
+  try {
+    for (const inputName of node.inputNames) {
+      // nodePlan.inputs.push(await getDataFromJsonFile(inputName.replace(/\//g,
+      // '_').replace(/:/g, '_')));
+      const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
+      const inputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+      if (inputData.type === 'float') {
+        inputData.type = 'float32';
+      }
+      nodePlan.inputs.push(inputData);
+    }
+  } catch (e) {
+    console.error(
+        ('Can not find input: ' + node.name + ', ' + JSON.stringify(node)));
+    return null;
+  }
+
+  try {
+    for (const outputName of node.outputNames) {
+      // nodePlan.outputs.push(await
+      // getDataFromJsonFile(outputName.replace(/\//g, '_').replace(/:/g,
+      // '_')));
+      // const outputData =
+      //    dumpDataMap.get(outputName.replace(/\//g, '_').replace(/:/g, '_'));
+      const regName = outputName.replace(/\//g, '_').replace(/:/g, '_');
+      const outputData =
+          isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+      if (outputData.type === 'float') {
+        outputData.type = 'float32';
+      }
+      nodePlan.outputs.push(outputData);
+    }
+  } catch (e) {
+    console.error(
+        'Can not find output: ' + node.name + ', ' + JSON.stringify(node));
+    return null;
+  }
+
+  for (const input of nodePlan['inputs'])
+    inputShapeDefinitions.push((input['dims']));
+  const attributs = [];
+  node.attributes._attributes.forEach((value, key) => {
+    attributs.push({'name': key, 'data': value[0], 'type': value[1]});
+  });
+  let domain = {'domain': 'com.microsoft', 'version': 1};
+  if (node.opType === 'Add' || node.opType === 'Conv' ||
+      node.opType === 'Shape' || node.opType === 'Reshape' ||
+      node.opType === 'Gather' || node.opType === 'Unsqueeze' ||
+      node.opType === 'Concat' || node.opType === 'GlobalAveragePool' ||
+      node.opType === 'Slice' || node.opType === 'Cast' ||
+      node.opType === 'Softmax' || node.opType === 'MatMul' ||
+      node.opType === 'Sub' || node.opType === 'Mul' || node.opType === 'Add' ||
+      node.opType === 'Div' || node.opType === 'LayerNormalization' ||
+      node.opType === 'Transpose'|| node.opType === 'Gemm') {
+    domain = {'domain': '', 'version': 12};
+  }
+  const graphPlan = {
+    'name': node.opType,
+    'operator': node.opType,
+    'attributes': attributs,
+    'inputShapeDefinitions': inputShapeDefinitions,
+    'cases': [
+      nodePlan,
+    ],
+    'backend': getParam('ep') || 'webgpu',
+    // "opset": { "domain": "", "version": 12 }
+    'opset': domain,
+    //"opset":
+    //[{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
+  };
+
+  return graphPlan;
+}
+
+async function runGraphPlan(graphPlan) {
+  // ort.env.debug = true
+  // ort.env.logLevel = 'verbose';
+
+  const model = onnxProto.ModelProto.create();
+  model.irVersion = onnxProto.Version.IR_VERSION;
+  // model.opsetImport.push(opsetImport);
+  model.opsetImport = [
+    {'domain': '', 'version': 12},
+    {'domain': 'com.microsoft.nchwc', 'version': 1},
+    {'domain': 'ai.onnx.ml', 'version': 3},
+    {'domain': 'com.ms.internal.nhwc', 'version': 19},
+    {'domain': 'ai.onnx.training', 'version': 1},
+    {'domain': 'ai.onnx.preview.training', 'version': 1},
+    {'domain': 'com.microsoft', 'version': 1},
+    {'domain': 'com.microsoft.experimental', 'version': 1},
+    {'domain': 'org.pytorch.aten', 'version': 1}
+  ];
+  model.graph = onnxProto.GraphProto.create();
+
+  const case0 = graphPlan['cases'][0];
+  // TODO: outputs maybe array.
+  const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
+  const result = await onnxdecoder.runProtoOpTestcase(session, case0);
+  return result;
+}
+
+export async function loadModel(arg, byteOffset, length) {
+  // const model = new onnx.Model();
+  const model = new ort.Model();
+  if (typeof arg === 'string') {
+    const isOrtFormat = arg.endsWith('.ort');
+    if (typeof process !== 'undefined' && process.versions &&
+        process.versions.node) {
+      // node
+      const buf = await readFile(arg);
+      model.load(buf);
+    } else {
+      // browser
+      const response = await fetch(arg);
+      const buf = await response.arrayBuffer();
+      model.load(new Uint8Array(buf));
+    }
+  } else if (!ArrayBuffer.isView(arg)) {
+    // load model from ArrayBuffer
+    const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
+    // this.initialize(arr);
+    model.load(arr);
+  } else {
+    model.load(arg);
+  }
+  return model;
+}
+
+function convertArrayToBigInt64Array(array) {
+  const bigint64array = new BigInt64Array(array.length);
+  for (var i = 0; i < array.length; i++) {
+    bigint64array[i] = BigInt(array[i]);
+  }
+  return bigint64array;
+}
+
+function compareIgnoreType(reference, result) {
+  const isResultInt64 = result instanceof BigInt64Array;
+  const referenceInt64 =
+      isResultInt64 ? convertArrayToBigInt64Array(reference) : reference;
+  if (isResultInt64) {
+    return (
+        JSON.stringify(referenceInt64.sort()) ===
+        JSON.stringify(result.sort()));
+  }
+  return compare(referenceInt64, Array.from(result));
+}
+
+async function compareSingleNode(node, dumpDataMap) {
+  const graphPlan = await generateGraphPlan(node, dumpDataMap);
+  if (graphPlan == null) {
+    return;
+  }
+  const result1 = await runGraphPlan(graphPlan);
+  let reference = graphPlan['cases'][0]['outputs'][0].data;
+  const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
+  if (compareResult)
+    console.log(
+        'Wasm vs ' + graphPlan['backend'] +
+        ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
+        graphPlan['cases'][0]['name']);
+  else {
+    console.log('CMP reference : ' + JSON.stringify(reference));
+    console.log(
+        'CMP result : ' + JSON.stringify(Array.from(result1.output_0.cpuData)));
+    console.error(
+        'Wasm vs ' + graphPlan['backend'] + ', compare result=' +
+        compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
+        graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
+        JSON.stringify(graphPlan['inputShapeDefinitions']));
+  }
+}
+
+export async function compareModel(model, dumpDataMap) {
+  // Step 1: generate dump data files.
+  // await generateDumpData();
+  // Step 2: get node list, then run and compare.
+  // const model = await loadModel(`./ort-models/${modelName}.onnx`);
+  // const model = await getOptimizedModel();//await
+  // loadModel(`./ort-models/${modelName}.onnx`);
+  const nodes = model.graph._nodes;
+  const testNode = getParam('node');
+  // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
+  if (testNode) {
+    for (const node of nodes) {
+      if (testNode && node.name === testNode) {
+        await compareSingleNode(node, dumpDataMap);
+        break;
+      }
+    }
+  } else {
+    for (const node of nodes) {
+      await compareSingleNode(node, dumpDataMap);
+    }
+  }
+}
+
+const localTest = true;
+export async function dump(modelName, runTaskFn) {
+  let dumpDataMap;
+  let optimizedModelBuffer;
+  const optimizedModelName = modelName + '-opt.json';
+  const optimizedModelDataName = modelName + '-opt-data.json';
+
+  const enableDump = false;
+  if (enableDump) {
+    dumpDataMap = new OnnxDumpData(modelName);
+    // 1. Generate optimized onnx file.
+    optimizedModelBuffer = await getOptimizedModel(modelName);
+    if (localTest) {
+      writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
+    }
+    // 2. Generate weights data.
+    console.log('Dump, Generate weights data.');
+    const modelUrl = `ort-models/${modelName}.onnx`;
+    await dumpDataMap.addWeights(optimizedModelBuffer);
+    console.log('Dump, run.');
+    // 3, Generate other dump data: input, output.
+    window.dump = 1;
+    await runTaskFn('performance', 'wasm');
+    window.dump = 0;
+    if (window.dumpBlobUrlMap != null) {
+      console.log('Dump input output.');
+      await dumpDataMap.addInputOutput(window.dumpBlobUrlMap);
+    }
+    console.log('Dump end.');
+    if (localTest) {
+      writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+    }
+    dumpDataMap = dumpDataMap.getDumpData();
+  }
+
+
+  // 4, cmp
+  {
+    if (localTest) {
+      console.log(optimizedModelName);
+      optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
+      console.log(optimizedModelBuffer);
+      dumpDataMap = await readObjectFromFile(optimizedModelDataName);
+    }
+    const model = await loadModel(optimizedModelBuffer);
+    console.log(model);
+    await compareModel(model, dumpDataMap);
+  }
+  // return model;
 }
