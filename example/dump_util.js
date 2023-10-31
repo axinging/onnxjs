@@ -252,7 +252,7 @@ export async function readObjectFromJson2(fileUrl) {
 const onnxProto = ort.OnnxProto.onnx;
 
 async function getDataFromJsonFile(modelName, fileUrl) {
-  const deviceName = '';  //'-7779';
+  const deviceName = '-9106';  //'-7779';
   // TODO: Fix constant node file not found.
   const response =
       await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
@@ -543,7 +543,8 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
       console.log(optimizedModelName);
       optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
       console.log(optimizedModelBuffer);
-      dumpDataMap = await readObjectFromFile(optimizedModelDataName);
+      // when cmp only, this means the dump data is from seperated file.
+      dumpDataMap = dumpOrCmp ==2 ? null : await readObjectFromFile(optimizedModelDataName);
     }
     const model = await loadModel(optimizedModelBuffer);
     console.log(model);
