@@ -236,18 +236,13 @@ export async function readObjectFromJson2(fileUrl) {
   return arr;
 }
 
-// Compare related tools
-// import * as onnxModule from "./onnx.js";
+const onnxProto = ort.OnnxProto.onnx;
 
-const onnxProto = ort.OnnxProto.onnx;  // onnxModule.onnx;
-// const modelName = 'albert-base-v2-all';//'mobilenetv2-12-opt';
-const deviceName = '-7779'
-async function getDataFromJsonFile(name) {
-  const modelName = 'albert-base-v2-all';
-  console.error('Error! ');
+async function getDataFromJsonFile(modelName, fileUrl) {
+  const deviceName = '-7779';
   // TODO: Fix constant node file not found.
   const response =
-      await fetch(`./modeldata/${modelName}${deviceName}/` + name + '.json');
+      await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
   const json = await response.json();
   if (json.type === 'float') {
     json.type = 'float32';
@@ -426,6 +421,7 @@ async function compareSingleNode(node, dumpDataMap) {
   if (graphPlan == null) {
     return;
   }
+  console.log(JSON.stringify(graphPlan));
   const result1 = await runGraphPlan(graphPlan);
   let reference = graphPlan['cases'][0]['outputs'][0].data;
   const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
@@ -454,8 +450,9 @@ export async function compareModel(model, dumpDataMap) {
   // const model = await getOptimizedModel();//await
   // loadModel(`./ort-models/${modelName}.onnx`);
   const nodes = model.graph._nodes;
-  const testNode = getParam('node');
+  let testNode = getParam('node');
   // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
+  // testNode = 'Conv_4';
   if (testNode) {
     for (const node of nodes) {
       if (testNode && node.name === testNode) {
@@ -471,17 +468,20 @@ export async function compareModel(model, dumpDataMap) {
 }
 
 const localTest = true;
+const enableDump = false;
 export async function dump(modelName, runTaskFn) {
   let dumpDataMap;
   let optimizedModelBuffer;
   const optimizedModelName = modelName + '-opt.json';
   const optimizedModelDataName = modelName + '-opt-data.json';
 
-  const enableDump = false;
+
   if (enableDump) {
     dumpDataMap = new OnnxDumpData(modelName);
     // 1. Generate optimized onnx file.
+    window.dump = 2;
     optimizedModelBuffer = await getOptimizedModel(modelName);
+    window.dump = 0;
     if (localTest) {
       writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
     }
