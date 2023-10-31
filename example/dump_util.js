@@ -467,22 +467,26 @@ export async function compareModel(model, dumpDataMap) {
   }
 }
 
-const localTest = true;
-const enableDump = false;
-export async function dump(modelName, runTaskFn) {
+// dump(1)
+export async function dump(modelName, runTaskFn, dumpOrCmp) {
+  //const saveToFile = true;
+  //const enableDump = false;
   let dumpDataMap;
   let optimizedModelBuffer;
   const optimizedModelName = modelName + '-opt.json';
   const optimizedModelDataName = modelName + '-opt-data.json';
+  // When dumpOrCmp: 0, dump and cmp not from file.
+  // 1, dump data to file; 2, cmp based on file. 
+  const useFile = dumpOrCmp != 0;
 
 
-  if (enableDump) {
+  if (dumpOrCmp !=2 ) {
     dumpDataMap = new OnnxDumpData(modelName);
     // 1. Generate optimized onnx file.
     window.dump = 2;
     optimizedModelBuffer = await getOptimizedModel(modelName);
     window.dump = 0;
-    if (localTest) {
+    if (useFile) {
       writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
     }
     // 2. Generate weights data.
@@ -499,16 +503,21 @@ export async function dump(modelName, runTaskFn) {
       await dumpDataMap.addInputOutput(window.dumpBlobUrlMap);
     }
     console.log('Dump - end.');
-    if (localTest) {
-      writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+    if (useFile) {
+      // writeObjectToFile works on mobilenet, not on albert.
+      if (modelName == 'mobilenetv2-12') {
+        writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+      } else {
+        writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+      }
     }
     dumpDataMap = dumpDataMap.getDumpData();
   }
 
 
   // 4, cmp
-  {
-    if (localTest) {
+  if (dumpOrCmp !=1 ) {
+    if (useFile) {
       console.log(optimizedModelName);
       optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
       console.log(optimizedModelBuffer);
