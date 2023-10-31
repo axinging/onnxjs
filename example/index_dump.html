@@ -97,11 +97,15 @@
       } else {
         urls = ['https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.webgpu.min.js'];
       }
-      let binary = 'cmp';
+      let binary = 'dump';
+      /*
       for (let task of tasks.split(',')) {
         if (task === 'dump') {
           binary = 'dump';
         }
+      }*/
+      if(getParam('dump') == 2) {
+        binary = 'cmp';
       }
       urls = [`./web_${binary}/dist/ort.all.js`];
       // urls = urls.concat(['./dump_util.js']);

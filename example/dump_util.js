@@ -25,6 +25,19 @@ export function writeObjectToFile(json_object, name, time = 100) {
   sleep(time);
 }
 
+export function writeMapToFile(json_object, name, time = 100) {
+  let object = json_object;
+  const file_name = name;
+  const a = document.createElement('a');
+  if (object instanceof Map) {
+    // object = Object.fromEntries(object);
+    for (let [key, value] of object) {
+      console.log(key + ' = ' + value);
+      writeObjectToFile(value, key + '.json');
+    }
+  }
+}
+
 export function writeObjectToFile2(json_object, name, time = 100) {
   let object = json_object;
   const file_name = name;
@@ -239,7 +252,7 @@ export async function readObjectFromJson2(fileUrl) {
 const onnxProto = ort.OnnxProto.onnx;
 
 async function getDataFromJsonFile(modelName, fileUrl) {
-  const deviceName = '-7779';
+  const deviceName = '';  //'-7779';
   // TODO: Fix constant node file not found.
   const response =
       await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
@@ -263,49 +276,55 @@ function getParam(name) {
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
 
-async function generateGraphPlan(node, dumpDataMap) {
+async function generateGraphPlan(node, dumpDataMap, modelName) {
   const nodePlan = {name: node.name};
   nodePlan.inputs = [];
   nodePlan.outputs = [];
   const inputShapeDefinitions = [];
   const isMap = dumpDataMap instanceof Map;
-  try {
-    for (const inputName of node.inputNames) {
-      // nodePlan.inputs.push(await getDataFromJsonFile(inputName.replace(/\//g,
-      // '_').replace(/:/g, '_')));
-      const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
-      const inputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+  for (const inputName of node.inputNames) {
+    let inputData;
+    const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
+    try {
+      inputData = await getDataFromJsonFile(modelName, regName);
+    } catch (err) {
+      console.error(inputName + ' Not found');
+      inputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+    } finally {
+      if (inputData == null) {
+        console.error(
+            ('Can not find input: ' + node.name + ', ' + JSON.stringify(node)));
+        return null;
+      }
       if (inputData.type === 'float') {
         inputData.type = 'float32';
       }
       nodePlan.inputs.push(inputData);
     }
-  } catch (e) {
-    console.error(
-        ('Can not find input: ' + node.name + ', ' + JSON.stringify(node)));
-    return null;
   }
 
-  try {
-    for (const outputName of node.outputNames) {
-      // nodePlan.outputs.push(await
-      // getDataFromJsonFile(outputName.replace(/\//g, '_').replace(/:/g,
-      // '_')));
-      // const outputData =
-      //    dumpDataMap.get(outputName.replace(/\//g, '_').replace(/:/g, '_'));
-      const regName = outputName.replace(/\//g, '_').replace(/:/g, '_');
-      const outputData =
-          isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+
+  for (const outputName of node.outputNames) {
+    let outputData;
+    const regName = outputName.replace(/\//g, '_').replace(/:/g, '_');
+    try {
+      outputData = await getDataFromJsonFile(modelName, regName);
+    } catch (err) {
+      console.error(outputName + ' Not found');
+      outputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+    } finally {
+      if (outputData == null) {
+        console.error(
+            ('Can not find output: ' + node.name + ', ' + JSON.stringify(node)));
+        return null;
+      }
       if (outputData.type === 'float') {
         outputData.type = 'float32';
       }
       nodePlan.outputs.push(outputData);
     }
-  } catch (e) {
-    console.error(
-        'Can not find output: ' + node.name + ', ' + JSON.stringify(node));
-    return null;
   }
+
 
   for (const input of nodePlan['inputs'])
     inputShapeDefinitions.push((input['dims']));
@@ -322,7 +341,7 @@ async function generateGraphPlan(node, dumpDataMap) {
       node.opType === 'Softmax' || node.opType === 'MatMul' ||
       node.opType === 'Sub' || node.opType === 'Mul' || node.opType === 'Add' ||
       node.opType === 'Div' || node.opType === 'LayerNormalization' ||
-      node.opType === 'Transpose'|| node.opType === 'Gemm') {
+      node.opType === 'Transpose' || node.opType === 'Gemm') {
     domain = {'domain': '', 'version': 12};
   }
   const graphPlan = {
@@ -416,8 +435,8 @@ function compareIgnoreType(reference, result) {
   return compare(referenceInt64, Array.from(result));
 }
 
-async function compareSingleNode(node, dumpDataMap) {
-  const graphPlan = await generateGraphPlan(node, dumpDataMap);
+async function compareSingleNode(node, dumpDataMap, modelName) {
+  const graphPlan = await generateGraphPlan(node, dumpDataMap, modelName);
   if (graphPlan == null) {
     return;
   }
@@ -442,7 +461,7 @@ async function compareSingleNode(node, dumpDataMap) {
   }
 }
 
-export async function compareModel(model, dumpDataMap) {
+export async function compareModel(model, dumpDataMap, modelName) {
   // Step 1: generate dump data files.
   // await generateDumpData();
   // Step 2: get node list, then run and compare.
@@ -456,31 +475,31 @@ export async function compareModel(model, dumpDataMap) {
   if (testNode) {
     for (const node of nodes) {
       if (testNode && node.name === testNode) {
-        await compareSingleNode(node, dumpDataMap);
+        await compareSingleNode(node, dumpDataMap, modelName);
         break;
       }
     }
   } else {
     for (const node of nodes) {
-      await compareSingleNode(node, dumpDataMap);
+      await compareSingleNode(node, dumpDataMap, modelName);
     }
   }
 }
 
 // dump(1)
 export async function dump(modelName, runTaskFn, dumpOrCmp) {
-  //const saveToFile = true;
-  //const enableDump = false;
+  // const saveToFile = true;
+  // const enableDump = false;
   let dumpDataMap;
   let optimizedModelBuffer;
   const optimizedModelName = modelName + '-opt.json';
   const optimizedModelDataName = modelName + '-opt-data.json';
   // When dumpOrCmp: 0, dump and cmp not from file.
-  // 1, dump data to file; 2, cmp based on file. 
+  // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
 
-  if (dumpOrCmp !=2 ) {
+  if (dumpOrCmp != 2) {
     dumpDataMap = new OnnxDumpData(modelName);
     // 1. Generate optimized onnx file.
     window.dump = 2;
@@ -506,9 +525,12 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     if (useFile) {
       // writeObjectToFile works on mobilenet, not on albert.
       if (modelName == 'mobilenetv2-12') {
-        writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+        writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+        // writeObjectToFile(dumpDataMap.getDumpData(),
+        // optimizedModelDataName);//works
       } else {
-        writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+        // For albert , too big.
+        writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
       }
     }
     dumpDataMap = dumpDataMap.getDumpData();
@@ -516,7 +538,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
 
 
   // 4, cmp
-  if (dumpOrCmp !=1 ) {
+  if (dumpOrCmp != 1) {
     if (useFile) {
       console.log(optimizedModelName);
       optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
@@ -525,7 +547,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     }
     const model = await loadModel(optimizedModelBuffer);
     console.log(model);
-    await compareModel(model, dumpDataMap);
+    await compareModel(model, dumpDataMap, modelName);
   }
   // return model;
 }
