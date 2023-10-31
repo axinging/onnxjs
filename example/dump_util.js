@@ -12,9 +12,8 @@ function sleep(ms) {
 }
 
 export function writeObjectToFile(json_object, name, time = 100) {
-  // const name = json_object['name'];
   let object = json_object;
-  const file_name = name;  // `${name}.json`;
+  const file_name = name;
   const a = document.createElement('a');
   if (object instanceof Map) {
     object = Object.fromEntries(object);
@@ -27,9 +26,8 @@ export function writeObjectToFile(json_object, name, time = 100) {
 }
 
 export function writeObjectToFile2(json_object, name, time = 100) {
-  // const name = json_object['name'];
   let object = json_object;
-  const file_name = name;  // `${name}.json`;
+  const file_name = name;
   const a = document.createElement('a');
   if (object instanceof Map) {
     object = Object.fromEntries(object);
@@ -51,7 +49,6 @@ export async function readObjectFromJson(fileUrl) {
     console.error(err);
   }
 
-  //
   try {
     const text = await response.text();
     console.log(JSON.parse(text));
@@ -68,12 +65,10 @@ export async function readObjectFromFile(fileUrl) {
   return blobObject;
 }
 
-
 function tensorDimsFromProto(dims) {
   // get rid of Long type for dims
   return dims.map(d => Long.isLong(d) ? d.toNumber() : d);
 }
-
 
 function tensorDataTypeFromProto(typeProto) {
   switch (typeProto) {
@@ -111,7 +106,6 @@ function tensorDataTypeFromProto(typeProto) {
   }
 }
 
-
 export async function downloadWeights(arg) {
   const response = await fetch(arg);
   const buf = await response.arrayBuffer();
@@ -127,7 +121,6 @@ export async function downloadWeights(arg) {
     writeObjectToFile(tensor, regName + '.json');
   }
 }
-
 
 export async function addWeights(map, arg) {
   const response = await fetch(arg);
@@ -146,7 +139,6 @@ export async function addWeights(map, arg) {
     ;
   }
 }
-
 
 export async function getOptimizedModel(modelName, save = false) {
   const modelDir = './ort-models/';
@@ -185,10 +177,6 @@ export async function getOptimizedModel(modelName, save = false) {
   const response = await fetch(window.optmizedModelBlobUrl);
   const blob = await response.blob();
   const arr = new Uint8Array(await blob.arrayBuffer());
-  if (save) {
-    // var file = new File([blob], optmizedModelName);
-    // writeObjectToFile(arr, optmizedModelName);
-  }
   // const model = await loadModel(arr);
   // return model;
   return arr;
@@ -242,20 +230,8 @@ export class OnnxDumpData {
 
 
 export async function readObjectFromJson2(fileUrl) {
-  /*
-  const response = await fetch(fileUrl);
-  //const blob = await response.blob();
-  let blobObject;
-  try {
-      blobObject = await response.text();
-      blobObject = (JSON.parse(blobObject));
-  } catch (err) {
-      console.error(err);
-  }
-  return blobObject;*/
   let response = await fetch(fileUrl);
   const blob = await response.blob();
-  // console.log(blob);
   const arr = new Uint8Array(await blob.arrayBuffer());
   return arr;
 }
@@ -375,7 +351,6 @@ async function generateGraphPlan(node, dumpDataMap) {
 async function runGraphPlan(graphPlan) {
   // ort.env.debug = true
   // ort.env.logLevel = 'verbose';
-
   const model = onnxProto.ModelProto.create();
   model.irVersion = onnxProto.Version.IR_VERSION;
   // model.opsetImport.push(opsetImport);
@@ -511,19 +486,19 @@ export async function dump(modelName, runTaskFn) {
       writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
     }
     // 2. Generate weights data.
-    console.log('Dump, Generate weights data.');
+    console.log('Dump - Generate weights data.');
     const modelUrl = `ort-models/${modelName}.onnx`;
     await dumpDataMap.addWeights(optimizedModelBuffer);
-    console.log('Dump, run.');
+    console.log('Dump - run.');
     // 3, Generate other dump data: input, output.
     window.dump = 1;
     await runTaskFn('performance', 'wasm');
     window.dump = 0;
     if (window.dumpBlobUrlMap != null) {
-      console.log('Dump input output.');
+      console.log('Dump - input output.');
       await dumpDataMap.addInputOutput(window.dumpBlobUrlMap);
     }
-    console.log('Dump end.');
+    console.log('Dump - end.');
     if (localTest) {
       writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
     }
