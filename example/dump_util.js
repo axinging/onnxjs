@@ -11,7 +11,7 @@ function sleep(ms) {
   return;
 }
 
-export function writeObjectToFile(json_object, name, time = 100) {
+export function writeObjectToFile(json_object, name, time = 200) {
   let object = json_object;
   const file_name = name;
   const a = document.createElement('a');
@@ -25,7 +25,7 @@ export function writeObjectToFile(json_object, name, time = 100) {
   sleep(time);
 }
 
-export function writeMapToFile(json_object, name, time = 100) {
+export function writeMapToFile(json_object, name, time = 200) {
   let object = json_object;
   const file_name = name;
   const a = document.createElement('a');
@@ -38,7 +38,7 @@ export function writeMapToFile(json_object, name, time = 100) {
   }
 }
 
-export function writeObjectToFile2(json_object, name, time = 100) {
+export function writeObjectToFile2(json_object, name, time = 200) {
   let object = json_object;
   const file_name = name;
   const a = document.createElement('a');
@@ -444,11 +444,11 @@ async function compareSingleNode(node, dumpDataMap, modelName) {
   const result1 = await runGraphPlan(graphPlan);
   let reference = graphPlan['cases'][0]['outputs'][0].data;
   const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
+  const compareInfo = 'Wasm vs ' + graphPlan['backend'] +
+    ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
+    graphPlan['cases'][0]['name'];
   if (compareResult)
-    console.log(
-        'Wasm vs ' + graphPlan['backend'] +
-        ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
-        graphPlan['cases'][0]['name']);
+    console.log(compareInfo);
   else {
     console.log('CMP reference : ' + JSON.stringify(reference));
     console.log(
@@ -459,6 +459,7 @@ async function compareSingleNode(node, dumpDataMap, modelName) {
         graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
         JSON.stringify(graphPlan['inputShapeDefinitions']));
   }
+  return [compareResult, compareInfo];
 }
 
 export async function compareModel(model, dumpDataMap, modelName) {
@@ -480,9 +481,12 @@ export async function compareModel(model, dumpDataMap, modelName) {
       }
     }
   } else {
+    const results = [];
     for (const node of nodes) {
-      await compareSingleNode(node, dumpDataMap, modelName);
+      const [compareResult, compareInfo] = await compareSingleNode(node, dumpDataMap, modelName);
+      results.push({"result": compareResult, "info": compareInfo});
     }
+    writeObjectToFile(results, modelName+"-results.json");
   }
 }
 
@@ -521,7 +525,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
       console.log('Dump - input output.');
       await dumpDataMap.addInputOutput(window.dumpBlobUrlMap);
     }
-    console.log('Dump - end.');
+    console.log('Dump - End.');
     if (useFile) {
       // writeObjectToFile works on mobilenet, not on albert.
       if (modelName == 'mobilenetv2-12') {
@@ -538,6 +542,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
 
 
   // 4, cmp
+  console.log("Compare - Begin.");
   if (dumpOrCmp != 1) {
     if (useFile) {
       console.log(optimizedModelName);
@@ -550,5 +555,5 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     console.log(model);
     await compareModel(model, dumpDataMap, modelName);
   }
-  // return model;
+  console.log("Compare - End.");
 }
