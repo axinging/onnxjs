@@ -260,7 +260,6 @@
     async function loadScript(url) {
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        console.log(url);
         if(url == "./dump_util.js") {
           script.type = 'module';
         }

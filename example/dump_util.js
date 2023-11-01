@@ -254,13 +254,17 @@ const onnxProto = ort.OnnxProto.onnx;
 async function getDataFromJsonFile(modelName, fileUrl) {
   const deviceName = '';//'-9106';  //'-7779';
   // TODO: Fix constant node file not found.
-  const response =
-      await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
-  const json = await response.json();
-  if (json.type === 'float') {
-    json.type = 'float32';
+  try {
+    const response =
+        await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
+    const json = await response.json();
+    if (json.type === 'float') {
+      json.type = 'float32';
+    }
+    return json;
+  } catch (e) {
+    // Ignore this, data may be in data map.
   }
-  return json;
 }
 
 BigInt.prototype.toJSON = function() {
@@ -309,7 +313,6 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
     try {
       outputData = await getDataFromJsonFile(modelName, regName);
     } catch (err) {
-      console.error(outputName + ' Not found');
       outputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
     } finally {
       if (outputData == null) {
@@ -340,7 +343,8 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
       node.opType === 'Softmax' || node.opType === 'MatMul' ||
       node.opType === 'Sub' || node.opType === 'Mul' || node.opType === 'Add' ||
       node.opType === 'Div' || node.opType === 'LayerNormalization' ||
-      node.opType === 'Transpose' || node.opType === 'Gemm') {
+      node.opType === 'Transpose' || node.opType === 'Gemm' ||
+      node.opType === 'BatchNormalization') {
     domain = {'domain': '', 'version': 12};
   }
   const graphPlan = {
