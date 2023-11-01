@@ -98,12 +98,6 @@
         urls = ['https://cdn.jsdelivr.net/npm/onnxruntime-web@latest/dist/ort.webgpu.min.js'];
       }
       let binary = 'dump';
-      /*
-      for (let task of tasks.split(',')) {
-        if (task === 'dump') {
-          binary = 'dump';
-        }
-      }*/
       if(getParam('dump') == 2) {
         binary = 'cmp';
       }
@@ -113,19 +107,6 @@
       for (let url of urls) {
         await loadScript(url);
       }
-
-    }
-
-    // Get the input put data.
-    async function addDumpData(blobUrlMap, dumpDataMap) {
-      for (const [key, value] of blobUrlMap.entries()) {
-        let response = await fetch(key);
-        const blob = await response.blob();
-        // console.log(blob);
-        const arr = new Uint8Array(await blob.arrayBuffer());
-        dumpDataMap.set(key, arr);
-      }
-      return dumpDataMap;
     }
 
     async function main() {
