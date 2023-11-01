@@ -154,6 +154,7 @@ export async function addWeights(map, arg) {
 }
 
 export async function getOptimizedModel(modelName, save = false) {
+  console.log('Dump - Optimize model begin.');
   const modelDir = './ort-models/';
   // const modelName = 'albert-base-v2';
   const graphOptimizationLevel = 'all';
@@ -178,7 +179,7 @@ export async function getOptimizedModel(modelName, save = false) {
     };
     session = await ort.InferenceSession.create(
         modelDir + modelName + '.onnx', option);
-    console.log('END');
+    console.log('Dump - Optimize model end.');
 
   } catch (e) {
     console.error(`failed to inference ONNX model: ${e}.`);
@@ -445,9 +446,9 @@ async function compareSingleNode(node, dumpDataMap, modelName) {
   const compareInfo = 'Wasm vs ' + graphPlan['backend'] +
     ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
     graphPlan['cases'][0]['name'];
-  if (compareResult)
+  if (compareResult) {
     console.log(compareInfo);
-  else {
+  } else {
     console.log('CMP reference : ' + JSON.stringify(reference));
     console.log(
         'CMP result : ' + JSON.stringify(Array.from(result1.output_0.cpuData)));
@@ -461,12 +462,6 @@ async function compareSingleNode(node, dumpDataMap, modelName) {
 }
 
 export async function compareModel(model, dumpDataMap, modelName) {
-  // Step 1: generate dump data files.
-  // await generateDumpData();
-  // Step 2: get node list, then run and compare.
-  // const model = await loadModel(`./ort-models/${modelName}.onnx`);
-  // const model = await getOptimizedModel();//await
-  // loadModel(`./ort-models/${modelName}.onnx`);
   const nodes = model.graph._nodes;
   let testNode = getParam('node');
   // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
@@ -514,13 +509,12 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     console.log('Dump - Generate weights data.');
     const modelUrl = `ort-models/${modelName}.onnx`;
     await dumpDataMap.addWeights(optimizedModelBuffer);
-    console.log('Dump - run.');
+    console.log('Dump - Generate input output data.');
     // 3, Generate other dump data: input, output.
     window.dump = 1;
     await runTaskFn('performance', 'wasm');
     window.dump = 0;
     if (window.dumpBlobUrlMap != null) {
-      console.log('Dump - input output.');
       await dumpDataMap.addInputOutput(window.dumpBlobUrlMap);
     }
     console.log('Dump - End.');
@@ -528,8 +522,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
       // writeObjectToFile works on mobilenet, not on albert.
       if (modelName == 'mobilenetv2-12') {
         writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
-        // writeObjectToFile(dumpDataMap.getDumpData(),
-        // optimizedModelDataName);//works
+        // writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
       } else {
         // For albert , too big.
         writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
@@ -537,7 +530,6 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     }
     dumpDataMap = dumpDataMap.getDumpData();
   }
-
 
   // 4, cmp
   console.log("Compare - Begin.");
