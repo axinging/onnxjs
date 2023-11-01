@@ -303,7 +303,7 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
   nodePlan.inputs = [];
   nodePlan.outputs = [];
   const inputShapeDefinitions = [];
-  console.log(modelName + ", dump data type: " + (dumpDataMap instanceof Map));
+  console.log(modelName + ", dump data ismap: " + (dumpDataMap instanceof Map));
   for (const inputName of node.inputNames) {
     const inputData = await getData(inputName, node, dumpDataMap, modelName);
     nodePlan.inputs.push(inputData);
