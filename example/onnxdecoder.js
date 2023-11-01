@@ -1,6 +1,29 @@
+import Long from 'https://cdn.jsdelivr.net/npm/long@5.2.3/index.js';
+import * as flatbuffersModule from './flatbuffers/js/flatbuffers.mjs'
+
+// TODO: Fix this import.
+const flatbuffers = flatbuffersModule.flatbuffers;
+class LongUtil {
+  // This function is called to get a number from long type of data for attribute, dim, and ir version,
+  // which values are signed integers.
+  // To make it more generic, add an optional paramter to convert to a unsigned number.
+  static longToNumber(n, unsigned) {
+    if (Long.isLong(n)) {
+      return n.toNumber();
+    } else if (n instanceof flatbuffers.Long) {
+      return Long.fromValue({low: n.low, high: n.high, unsigned: unsigned ?? false}).toNumber();
+    }
+    return n;
+  }
+  static isLong(n) {
+    return Long.isLong(n) || n instanceof flatbuffers.Long;
+  }
+}
+
 export async  function createOnnxModel(test, onnx) {
   // const onnx = onnx;
   const opsetImport = onnx.OperatorSetIdProto.create(test.opset);
+
   const operator = test.operator;
   const attribute = (test.attributes || []).map(attr => {
     const protoAttr = onnx.AttributeProto.create({name: attr.name});
@@ -48,6 +71,9 @@ export async  function createOnnxModel(test, onnx) {
 
   const model = onnx.ModelProto.create();
   model.irVersion = onnx.Version.IR_VERSION;
+  // TODO: fix opsetImport
+  // model.opsetImport = test.opsetImport.map(i => ({domain: i.domain, version: LongUtil.longToNumber(i.version)}));
+  console.log(model.opsetImport);
   model.opsetImport.push(opsetImport);
   //model.opsetImport.push({"domain":"com.microsoft","version":1});
   /*
@@ -63,6 +89,7 @@ export async  function createOnnxModel(test, onnx) {
     input: test.cases[0].inputs.map((_, i) => `input_${i}`),
     output: test.cases[0].outputs.map((_, i) => `output_${i}`),
     opType: operator,
+    // TODO: fix opsetImport
     domain: test.opset?.domain, //{"domain":"com.microsoft","version":1},//
     name: operator,
     attribute

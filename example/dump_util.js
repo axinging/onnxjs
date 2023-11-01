@@ -298,7 +298,7 @@ async function getData(inputName, node, dumpDataMap, modelName) {
   return data;
 }
 
-async function generateGraphPlan(node, dumpDataMap, modelName) {
+async function generateGraphPlan(node, dumpDataMap, modelName, model) {
   const nodePlan = {name: node.name};
   nodePlan.inputs = [];
   nodePlan.outputs = [];
@@ -346,8 +346,9 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
       nodePlan,
     ],
     'backend': getParam('ep') || 'webgpu',
-    // "opset": { "domain": "", "version": 12 }
-    'opset': domain,
+    "opset": domain,
+    // TODO: fix opsetImport
+    // 'opsetImport': model._opsets,
     //"opset":
     //[{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
   };
@@ -358,6 +359,7 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
 async function runGraphPlan(graphPlan) {
   // ort.env.debug = true
   // ort.env.logLevel = 'verbose';
+  /*
   const model = onnxProto.ModelProto.create();
   model.irVersion = onnxProto.Version.IR_VERSION;
   // model.opsetImport.push(opsetImport);
@@ -373,6 +375,7 @@ async function runGraphPlan(graphPlan) {
     {'domain': 'org.pytorch.aten', 'version': 1}
   ];
   model.graph = onnxProto.GraphProto.create();
+  */
 
   const case0 = graphPlan['cases'][0];
   // TODO: outputs maybe array.
@@ -428,8 +431,8 @@ function compareIgnoreType(reference, result) {
   return compare(referenceInt64, Array.from(result));
 }
 
-async function compareSingleNode(node, dumpDataMap, modelName) {
-  const graphPlan = await generateGraphPlan(node, dumpDataMap, modelName);
+async function compareSingleNode(node, dumpDataMap, modelName, model) {
+  const graphPlan = await generateGraphPlan(node, dumpDataMap, modelName, model);
   if (graphPlan == null) {
     return;
   }
@@ -463,14 +466,14 @@ export async function compareModel(model, dumpDataMap, modelName) {
   if (testNode) {
     for (const node of nodes) {
       if (testNode && node.name === testNode) {
-        await compareSingleNode(node, dumpDataMap, modelName);
+        await compareSingleNode(node, dumpDataMap, modelName, model);
         break;
       }
     }
   } else {
     const results = [];
     for (const node of nodes) {
-      const [compareResult, compareInfo] = await compareSingleNode(node, dumpDataMap, modelName);
+      const [compareResult, compareInfo] = await compareSingleNode(node, dumpDataMap, modelName, model);
       results.push({"result": compareResult, "info": compareInfo});
     }
     writeObjectToFile(results, modelName+"-results.json");
