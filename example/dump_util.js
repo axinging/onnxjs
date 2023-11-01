@@ -195,7 +195,6 @@ export async function getOptimizedModel(modelName, save = false) {
   return arr;
 }
 
-
 export class OnnxDumpData {
   constructor(modelName) {
     this.dumpDataMap = new Map();
@@ -252,7 +251,7 @@ export async function readObjectFromJson2(fileUrl) {
 const onnxProto = ort.OnnxProto.onnx;
 
 async function getDataFromJsonFile(modelName, fileUrl) {
-  const deviceName = '-9106';  //'-7779';
+  const deviceName = '';//'-9106';  //'-7779';
   // TODO: Fix constant node file not found.
   const response =
       await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
@@ -288,7 +287,7 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
     try {
       inputData = await getDataFromJsonFile(modelName, regName);
     } catch (err) {
-      console.error(inputName + ' Not found');
+      // console.warn(inputName + ' Not found');
       inputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
     } finally {
       if (inputData == null) {
@@ -302,7 +301,6 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
       nodePlan.inputs.push(inputData);
     }
   }
-
 
   for (const outputName of node.outputNames) {
     let outputData;
