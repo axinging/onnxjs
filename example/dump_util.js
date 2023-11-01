@@ -330,8 +330,12 @@ async function generateGraphPlan(node, dumpDataMap, modelName) {
       node.opType === 'Sub' || node.opType === 'Mul' || node.opType === 'Add' ||
       node.opType === 'Div' || node.opType === 'LayerNormalization' ||
       node.opType === 'Transpose' || node.opType === 'Gemm' ||
-      node.opType === 'BatchNormalization') {
+      node.opType === 'LeakyRelu' || node.opType === 'MaxPool') {
     domain = {'domain': '', 'version': 12};
+  }
+
+  if(node.opType === 'BatchNormalization') {
+    domain = {'domain': '', 'version': 8};
   }
   const graphPlan = {
     'name': node.opType,
