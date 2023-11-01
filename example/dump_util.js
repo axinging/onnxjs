@@ -225,6 +225,7 @@ export class OnnxDumpData {
       // let response = await fetch(value);
       // const blob = await response.blob();
       // const blobObject = JSON.parse(await blob.text());
+      console.log("In js: "+ key);
       const blobObject = await readObjectFromFile(value);
       // const arr = new Uint8Array(await blob.arrayBuffer());
       this.dumpDataMap.set(key, blobObject);
@@ -254,7 +255,6 @@ const onnxProto = ort.OnnxProto.onnx;
 async function getDataFromJsonFile(modelName, fileUrl) {
   const deviceName = '';//'-9106';  //'-7779';
   // TODO: Fix constant node file not found.
-  try {
     const response =
         await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
     const json = await response.json();
@@ -262,9 +262,6 @@ async function getDataFromJsonFile(modelName, fileUrl) {
       json.type = 'float32';
     }
     return json;
-  } catch (e) {
-    // Ignore this, data may be in data map.
-  }
 }
 
 BigInt.prototype.toJSON = function() {
@@ -280,53 +277,42 @@ function getParam(name) {
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
 
+async function getData(inputName, node, dumpDataMap, modelName) {
+  let data;
+  const isMap = dumpDataMap instanceof Map;
+  const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
+  try {
+    data = await getDataFromJsonFile(modelName, regName);
+  } catch (err) {
+    data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+  } finally {
+    if (data == null) {
+      console.error(
+          ('Can not find input or output: ' + node.name + ', ' + JSON.stringify(node)));
+      return null;
+    }
+    if (data.type === 'float') {
+      data.type = 'float32';
+    }
+  }
+  return data;
+}
+
 async function generateGraphPlan(node, dumpDataMap, modelName) {
   const nodePlan = {name: node.name};
   nodePlan.inputs = [];
   nodePlan.outputs = [];
   const inputShapeDefinitions = [];
-  const isMap = dumpDataMap instanceof Map;
+  console.log(modelName + ", dump data type: " + (dumpDataMap instanceof Map));
   for (const inputName of node.inputNames) {
-    let inputData;
-    const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
-    try {
-      inputData = await getDataFromJsonFile(modelName, regName);
-    } catch (err) {
-      // console.warn(inputName + ' Not found');
-      inputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
-    } finally {
-      if (inputData == null) {
-        console.error(
-            ('Can not find input: ' + node.name + ', ' + JSON.stringify(node)));
-        return null;
-      }
-      if (inputData.type === 'float') {
-        inputData.type = 'float32';
-      }
-      nodePlan.inputs.push(inputData);
-    }
+    const inputData = await getData(inputName, node, dumpDataMap, modelName);
+    nodePlan.inputs.push(inputData);
   }
 
   for (const outputName of node.outputNames) {
-    let outputData;
-    const regName = outputName.replace(/\//g, '_').replace(/:/g, '_');
-    try {
-      outputData = await getDataFromJsonFile(modelName, regName);
-    } catch (err) {
-      outputData = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
-    } finally {
-      if (outputData == null) {
-        console.error(
-            ('Can not find output: ' + node.name + ', ' + JSON.stringify(node)));
-        return null;
-      }
-      if (outputData.type === 'float') {
-        outputData.type = 'float32';
-      }
-      nodePlan.outputs.push(outputData);
-    }
+    let outputData  = await getData(outputName, node, dumpDataMap, modelName);
+    nodePlan.outputs.push(outputData);
   }
-
 
   for (const input of nodePlan['inputs'])
     inputShapeDefinitions.push((input['dims']));
