@@ -225,7 +225,7 @@ export class OnnxDumpData {
       // let response = await fetch(value);
       // const blob = await response.blob();
       // const blobObject = JSON.parse(await blob.text());
-      console.log("In js: "+ key);
+      console.log('In js: ' + key);
       const blobObject = await readObjectFromFile(value);
       // const arr = new Uint8Array(await blob.arrayBuffer());
       this.dumpDataMap.set(key, blobObject);
@@ -253,15 +253,15 @@ export async function readObjectFromJson2(fileUrl) {
 const onnxProto = ort.OnnxProto.onnx;
 
 async function getDataFromJsonFile(modelName, fileUrl) {
-  const deviceName = '';//'-9106';  //'-7779';
-  // TODO: Fix constant node file not found.
-    const response =
-        await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
-    const json = await response.json();
-    if (json.type === 'float') {
-      json.type = 'float32';
-    }
-    return json;
+  const deviceName = '';  //'-9106';  //'-7779';
+                          // TODO: Fix constant node file not found.
+  const response =
+      await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
+  const json = await response.json();
+  if (json.type === 'float') {
+    json.type = 'float32';
+  }
+  return json;
 }
 
 BigInt.prototype.toJSON = function() {
@@ -288,7 +288,8 @@ async function getData(inputName, node, dumpDataMap, modelName) {
   } finally {
     if (data == null) {
       console.error(
-          ('Can not find input or output: ' + node.name + ', ' + JSON.stringify(node)));
+          ('Can not find input or output: ' + node.name + ', ' +
+           JSON.stringify(node)));
       return null;
     }
     if (data.type === 'float') {
@@ -298,45 +299,65 @@ async function getData(inputName, node, dumpDataMap, modelName) {
   return data;
 }
 
+// opset is array: [{domain: '', version: 8}, ]
+function getOpset(opType, opsets) {
+  let opset = {'domain': 'com.microsoft', 'version': 1};
+  if (opType === 'Add' || opType === 'Conv' || opType === 'Shape' ||
+      opType === 'Reshape' || opType === 'Gather' || opType === 'Unsqueeze' ||
+      opType === 'Concat' || opType === 'GlobalAveragePool' ||
+      opType === 'Slice' || opType === 'Cast' || opType === 'Softmax' ||
+      opType === 'MatMul' || opType === 'Sub' || opType === 'Mul' ||
+      opType === 'Add' || opType === 'Div' || opType === 'LayerNormalization' ||
+      opType === 'Transpose' || opType === 'Gemm' || opType === 'LeakyRelu' ||
+      opType === 'MaxPool' || opType === 'BatchNormalization') {
+    // {'domain': '', 'version': 12};
+    // BatchNormalization, opset = {'domain': '', 'version': 8};
+    opset.domain = '';
+  }
+
+  let versionFound = false;
+  for (const item of opsets) {
+    if (opset.domain === item.domain) {
+      opset.version = item.version;
+      versionFound = true;
+    }
+  }
+  if (!versionFound) {
+    throw new Error(
+        'Not find domain: ' + JSON.stringify(opset.domain) + ' in ' +
+        JSON.stringify(opsets));
+  }
+  return opset;
+}
+
 async function generateGraphPlan(node, dumpDataMap, modelName, model) {
   const nodePlan = {name: node.name};
   nodePlan.inputs = [];
   nodePlan.outputs = [];
   const inputShapeDefinitions = [];
-  console.log(modelName + ", dump data ismap: " + (dumpDataMap instanceof Map));
+  console.log(modelName + ', dump data ismap: ' + (dumpDataMap instanceof Map));
   for (const inputName of node.inputNames) {
     const inputData = await getData(inputName, node, dumpDataMap, modelName);
     nodePlan.inputs.push(inputData);
   }
 
   for (const outputName of node.outputNames) {
-    let outputData  = await getData(outputName, node, dumpDataMap, modelName);
+    let outputData = await getData(outputName, node, dumpDataMap, modelName);
     nodePlan.outputs.push(outputData);
   }
 
-  for (const input of nodePlan['inputs'])
+  for (const input of nodePlan['inputs']) {
     inputShapeDefinitions.push((input['dims']));
+  }
   const attributs = [];
   node.attributes._attributes.forEach((value, key) => {
     attributs.push({'name': key, 'data': value[0], 'type': value[1]});
   });
-  let domain = {'domain': 'com.microsoft', 'version': 1};
-  if (node.opType === 'Add' || node.opType === 'Conv' ||
-      node.opType === 'Shape' || node.opType === 'Reshape' ||
-      node.opType === 'Gather' || node.opType === 'Unsqueeze' ||
-      node.opType === 'Concat' || node.opType === 'GlobalAveragePool' ||
-      node.opType === 'Slice' || node.opType === 'Cast' ||
-      node.opType === 'Softmax' || node.opType === 'MatMul' ||
-      node.opType === 'Sub' || node.opType === 'Mul' || node.opType === 'Add' ||
-      node.opType === 'Div' || node.opType === 'LayerNormalization' ||
-      node.opType === 'Transpose' || node.opType === 'Gemm' ||
-      node.opType === 'LeakyRelu' || node.opType === 'MaxPool') {
-    domain = {'domain': '', 'version': 12};
-  }
 
-  if(node.opType === 'BatchNormalization') {
-    domain = {'domain': '', 'version': 8};
-  }
+  const opset = getOpset(node.opType, model._opsets);
+  console.log(
+      node.opType + ', ' +
+      'domain: ' + JSON.stringify(opset));
   const graphPlan = {
     'name': node.opType,
     'operator': node.opType,
@@ -346,7 +367,7 @@ async function generateGraphPlan(node, dumpDataMap, modelName, model) {
       nodePlan,
     ],
     'backend': getParam('ep') || 'webgpu',
-    "opset": domain,
+    'opset': opset,
     // TODO: fix opsetImport
     // 'opsetImport': model._opsets,
     //"opset":
@@ -432,7 +453,8 @@ function compareIgnoreType(reference, result) {
 }
 
 async function compareSingleNode(node, dumpDataMap, modelName, model) {
-  const graphPlan = await generateGraphPlan(node, dumpDataMap, modelName, model);
+  const graphPlan =
+      await generateGraphPlan(node, dumpDataMap, modelName, model);
   if (graphPlan == null) {
     return;
   }
@@ -441,14 +463,15 @@ async function compareSingleNode(node, dumpDataMap, modelName, model) {
   let reference = graphPlan['cases'][0]['outputs'][0].data;
   const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
   const compareInfo = 'Wasm vs ' + graphPlan['backend'] +
-    ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
-    graphPlan['cases'][0]['name'];
+      ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
+      graphPlan['cases'][0]['name'];
   if (compareResult) {
     console.log(compareInfo);
   } else {
-    console.log('CMP reference : ' + JSON.stringify(reference));
+    console.log('Compare reference : ' + JSON.stringify(reference));
     console.log(
-        'CMP result : ' + JSON.stringify(Array.from(result1.output_0.cpuData)));
+        'Compare result : ' +
+        JSON.stringify(Array.from(result1.output_0.cpuData)));
     console.error(
         'Wasm vs ' + graphPlan['backend'] + ', compare result=' +
         compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
@@ -473,10 +496,11 @@ export async function compareModel(model, dumpDataMap, modelName) {
   } else {
     const results = [];
     for (const node of nodes) {
-      const [compareResult, compareInfo] = await compareSingleNode(node, dumpDataMap, modelName, model);
-      results.push({"result": compareResult, "info": compareInfo});
+      const [compareResult, compareInfo] =
+          await compareSingleNode(node, dumpDataMap, modelName, model);
+      results.push({'result': compareResult, 'info': compareInfo});
     }
-    writeObjectToFile(results, modelName+"-results.json");
+    writeObjectToFile(results, modelName + '-results.json');
   }
 }
 
@@ -529,18 +553,20 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
   }
 
   // 4, cmp
-  console.log("Compare - Begin.");
+  console.log('Compare - Begin.');
   if (dumpOrCmp != 1) {
     if (useFile) {
       console.log(optimizedModelName);
       optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
       console.log(optimizedModelBuffer);
       // when cmp only, this means the dump data is from seperated file.
-      dumpDataMap = dumpOrCmp ==2 ? null : await readObjectFromFile(optimizedModelDataName);
+      dumpDataMap = dumpOrCmp == 2 ?
+          null :
+          await readObjectFromFile(optimizedModelDataName);
     }
     const model = await loadModel(optimizedModelBuffer);
     console.log(model);
     await compareModel(model, dumpDataMap, modelName);
   }
-  console.log("Compare - End.");
+  console.log('Compare - End.');
 }
