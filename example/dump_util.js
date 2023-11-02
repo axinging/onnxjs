@@ -156,18 +156,12 @@ export async function addWeights(map, arg) {
 export async function getOptimizedModel(modelName, save = false) {
   console.log('Dump - Optimize model begin.');
   const modelDir = './ort-models/';
-  // const modelName = 'albert-base-v2';
   const graphOptimizationLevel = 'all';
   const optmizedModelName = modelName + '-' + graphOptimizationLevel + '.onnx';
   const optimizedModelFilePath = modelDir + optmizedModelName;
   let session;
 
   try {
-    // create a new session and load the specific model.
-    //
-    // the model in this example contains a single MatMul node
-    // it has 2 inputs: 'a'(float32, 3x4) and 'b'(float32, 4x3)
-    // it has 1 output: 'c'(float32, 3x3)
     const option = {
       executionProviders: [
         {
@@ -182,7 +176,7 @@ export async function getOptimizedModel(modelName, save = false) {
     console.log('Dump - Optimize model end.');
 
   } catch (e) {
-    console.error(`failed to inference ONNX model: ${e}.`);
+    console.error(`Failed to inference ONNX model: ${e}.`);
   }
 
   console.log(window.optmizedModelBlobUrl);
@@ -200,8 +194,6 @@ export class OnnxDumpData {
   }
 
   async addWeights(optimizedModelBuffer) {
-    // const response = await fetch(modelUrl);
-    // const buf = await response.arrayBuffer();
     const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
     for (const i of modelProto.graph.initializer) {
       const tensor = {
@@ -219,10 +211,6 @@ export class OnnxDumpData {
   // Get the input put data.
   async addInputOutput(blobUrlMap) {
     for (const [key, value] of blobUrlMap.entries()) {
-      // let response = await fetch(value);
-      // const blob = await response.blob();
-      // const blobObject = JSON.parse(await blob.text());
-      console.log('In js: ' + key);
       const blobObject = await readObjectFromFile(value);
       // const arr = new Uint8Array(await blob.arrayBuffer());
       this.dumpDataMap.set(key, blobObject);
