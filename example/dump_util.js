@@ -135,7 +135,7 @@ export async function downloadWeights(arg) {
   }
 }
 
-export async function addWeights(map, arg) {
+export async function setupWeights(map, arg) {
   const response = await fetch(arg);
   const buf = await response.arrayBuffer();
   const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
@@ -193,7 +193,7 @@ export class OnnxDumpData {
     this.modelName = modelName;
   }
 
-  async addWeights(optimizedModelBuffer) {
+  async setupWeights(optimizedModelBuffer) {
     const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
     for (const i of modelProto.graph.initializer) {
       const tensor = {
@@ -209,7 +209,11 @@ export class OnnxDumpData {
   }
 
   // Get the input put data.
-  async addInputOutput(blobUrlMap) {
+  async setupInputOutputs() {
+    if (window.dumpBlobUrlMap == null) {
+      throw new Error('window.dumpBlobUrlMap is NULL!');
+    }
+    const blobUrlMap = window.dumpBlobUrlMap;
     for (const [key, value] of blobUrlMap.entries()) {
       const blobObject = await readObjectFromFile(value);
       // const arr = new Uint8Array(await blob.arrayBuffer());
@@ -494,16 +498,13 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     }
     // 2. Generate weights data.
     console.log('Dump - Generate weights data.');
-    const modelUrl = `ort-models/${modelName}.onnx`;
-    await dumpDataMap.addWeights(optimizedModelBuffer);
+    await dumpDataMap.setupWeights(optimizedModelBuffer);
     console.log('Dump - Generate input output data.');
     // 3, Generate other dump data: input, output.
     window.dump = 1;
     await runTaskFn('performance', 'wasm');
     window.dump = 0;
-    if (window.dumpBlobUrlMap != null) {
-      await dumpDataMap.addInputOutput(window.dumpBlobUrlMap);
-    }
+    await dumpDataMap.setupInputOutputs();
     console.log('Dump - End.');
     if (useFile) {
       // writeObjectToFile works on mobilenet, not on albert.
