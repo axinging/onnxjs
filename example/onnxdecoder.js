@@ -179,7 +179,7 @@ export async  function createOnnxModel(test, onnx) {
   return  session;
 }
 
-export async function runProtoOpTestcase(
+export async function runOnnxProtoOp(
   session, testCase){
 const feeds = {};//: Record<string, ort.Tensor> = {};
 const fetches = [];//: string[] = [];

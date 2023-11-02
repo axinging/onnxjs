@@ -401,7 +401,7 @@ async function runGraphPlan(graphPlan) {
   const case0 = graphPlan['cases'][0];
   // TODO: outputs maybe array.
   const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
-  const result = await onnxdecoder.runProtoOpTestcase(session, case0);
+  const result = await onnxdecoder.runOnnxProtoOp(session, case0);
   return result;
 }
 
