@@ -186,13 +186,10 @@ export async function getOptimizedModel(modelName, save = false) {
   }
 
   console.log(window.optmizedModelBlobUrl);
-  // let blob = await fetch(window.optmizedModelBlobUrl).then(r => r.blob());
-  // console.log(blob);
   const response = await fetch(window.optmizedModelBlobUrl);
   const blob = await response.blob();
   const arr = new Uint8Array(await blob.arrayBuffer());
-  // const model = await loadModel(arr);
-  // return model;
+  await session.release();
   return arr;
 }
 
@@ -241,7 +238,6 @@ export class OnnxDumpData {
     return this.dumpDataMap;
   }
 }
-
 
 export async function readObjectFromJson2(fileUrl) {
   let response = await fetch(fileUrl);
