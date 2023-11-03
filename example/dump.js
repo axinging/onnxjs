@@ -18,7 +18,9 @@ export function writeObjectToFile(json_object, name, time = 200) {
   if (object instanceof Map) {
     object = Object.fromEntries(object);
   }
-  const file = new Blob([JSON.stringify(object)], {type: 'application/json'});
+  let jsonStr = name.split('.').pop() === 'jsonc' ? JSON.stringify([object]) :
+                                                    JSON.stringify(object);
+  const file = new Blob([jsonStr], {type: 'application/json'});
   a.href = URL.createObjectURL(file);
   a.download = file_name;
   a.click();
@@ -437,7 +439,7 @@ async function compareSingleNode(node, dumpDataMap, modelName, model) {
       graphPlan['cases'][0]['name'];
   if (compareResult) {
     console.log(compareInfo);
-    writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
+    // writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
   } else {
     console.log('Compare reference : ' + JSON.stringify(reference));
     console.log(
@@ -448,7 +450,7 @@ async function compareSingleNode(node, dumpDataMap, modelName, model) {
         compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
         graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
         JSON.stringify(graphPlan['inputShapeDefinitions']));
-    writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
+    writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + '.jsonc');
   }
   return [compareResult, compareInfo];
 }
@@ -514,7 +516,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
         writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
         // writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
       } else {
-        // For albert , too big.
+        // For albert, too big.
         writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
       }
     }
