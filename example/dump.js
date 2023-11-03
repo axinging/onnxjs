@@ -437,6 +437,7 @@ async function compareSingleNode(node, dumpDataMap, modelName, model) {
       graphPlan['cases'][0]['name'];
   if (compareResult) {
     console.log(compareInfo);
+    writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
   } else {
     console.log('Compare reference : ' + JSON.stringify(reference));
     console.log(
@@ -447,6 +448,7 @@ async function compareSingleNode(node, dumpDataMap, modelName, model) {
         compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
         graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
         JSON.stringify(graphPlan['inputShapeDefinitions']));
+    writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
   }
   return [compareResult, compareInfo];
 }
