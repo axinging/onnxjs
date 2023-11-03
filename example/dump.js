@@ -121,10 +121,12 @@ function tensorDataTypeFromProto(typeProto) {
   }
 }
 
-export async function setupWeights(map, arg) {
-  const response = await fetch(arg);
-  const buf = await response.arrayBuffer();
-  const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
+export async function setupWeights(map, optimizedModelBuffer) {
+  // const response = await fetch(arg);
+  // const buf = await response.arrayBuffer();
+  // const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
+
+  const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
   for (const i of modelProto.graph.initializer) {
     const tensor = {
       'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
@@ -135,7 +137,18 @@ export async function setupWeights(map, arg) {
     const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
     // writeObjectToFile(tensor, regName);
     map.set(name, tensor);
-    ;
+  }
+}
+// Get the input put data.
+export async function setupInputOutputs(dumpDataMap) {
+  if (window.dumpBlobUrlMap == null) {
+    throw new Error('window.dumpBlobUrlMap is NULL!');
+  }
+  const blobUrlMap = window.dumpBlobUrlMap;
+  for (const [key, value] of blobUrlMap.entries()) {
+    const blobObject = await readObjectFromFile(value);
+    // const arr = new Uint8Array(await blob.arrayBuffer());
+    dumpDataMap.set(key, blobObject);
   }
 }
 
@@ -181,6 +194,7 @@ export class OnnxDumpData {
     this.useFile = dumpOrCmp != 0;
     this.optimizedModelName = modelName + '-opt.json';
     this.optimizedModelDataName = modelName + '-opt-data.json';
+    this.model = null;
   }
 
   async setupWeights() {
@@ -298,8 +312,70 @@ export class OnnxDumpData {
   }
 
   async compare() {
-    const model = await loadModel(this.optimizedModelBuffer)
-        await compareModel(model, this.dumpDataMap, this.modelName);
+    this.model =
+        await loadModel(this.optimizedModelBuffer) await compareModel();
+  }
+
+  async compareSingleNode(node) {
+    const dumpDataMap = this.dumpDataMap;
+    const modelName = this.modelName;
+    const model = this.model;
+
+
+    const graphPlan = await setupGraphPlan(node, dumpDataMap, modelName, model);
+    if (graphPlan == null) {
+      return;
+    }
+    console.log(JSON.stringify(graphPlan));
+    const result1 = await runGraphPlan(graphPlan);
+    let reference = graphPlan['cases'][0]['outputs'][0].data;
+    const compareResult =
+        compareIgnoreType(reference, result1.output_0.cpuData);
+    const compareInfo = 'Wasm vs ' + graphPlan['backend'] +
+        ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
+        graphPlan['cases'][0]['name'];
+    if (compareResult) {
+      console.log(compareInfo);
+      // writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
+    } else {
+      console.log('Compare reference : ' + JSON.stringify(reference));
+      console.log(
+          'Compare result : ' +
+          JSON.stringify(Array.from(result1.output_0.cpuData)));
+      console.error(
+          'Wasm vs ' + graphPlan['backend'] + ', compare result=' +
+          compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
+          graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
+          JSON.stringify(graphPlan['inputShapeDefinitions']));
+      writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + '.jsonc');
+    }
+    return [compareResult, compareInfo];
+  }
+
+  async compareModel() {
+    const model = this.model;
+    const dumpDataMap = this.dumpDataMap;
+    const modelName = this.modelName;
+    const nodes = model.graph._nodes;
+    let testNode = getParam('node');
+    // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
+    // testNode = 'Conv_4';
+    if (testNode) {
+      for (const node of nodes) {
+        if (testNode && node.name === testNode) {
+          await this.compareSingleNode(node);
+          break;
+        }
+      }
+    } else {
+      const results = [];
+      for (const node of nodes) {
+        const [compareResult, compareInfo] =
+            await this.compareSingleNode(node, dumpDataMap, modelName, model);
+        results.push({'result': compareResult, 'info': compareInfo});
+      }
+      writeObjectToFile(results, modelName + '-results.json');
+    }
   }
 
   getDumpData() {
@@ -557,7 +633,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
-  const useClass = true;
+  const useClass = false;
 
   if (useClass) {
     const dumpDataMap = new OnnxDumpData(modelName, dumpOrCmp);
@@ -580,7 +656,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     let optimizedModelBuffer;
     const optimizedModelName = modelName + '-opt.json';
     const optimizedModelDataName = modelName + '-opt-data.json';
-    dumpDataMap = new OnnxDumpData(modelName);
+    dumpDataMap = new Map();
     if (dumpOrCmp != 2) {
       // 1. Generate optimized onnx file.
       window.dump = 2;
@@ -591,28 +667,28 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
       }
       // 2. Generate weights data.
       console.log('Dump - Generate weights data.');
-      await dumpDataMap.setupWeights(optimizedModelBuffer);
+      await setupWeights(dumpDataMap, optimizedModelBuffer);
       console.log('Dump - Generate input output data.');
       // 3, Generate other dump data: input, output.
       window.dump = 1;
       await runTaskFn('performance', 'wasm');
       window.dump = 0;
-      await dumpDataMap.setupInputOutputs();
+      await setupInputOutputs(dumpDataMap);
       console.log('Dump - End.');
       if (useFile) {
         // writeObjectToFile works on mobilenet, not on albert.
         if (modelName == 'mobilenetv2-12') {
-          writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+          writeMapToFile(dumpDataMap, optimizedModelDataName);
           // writeObjectToFile(dumpDataMap.getDumpData(),
           // optimizedModelDataName);
         } else {
           // For albert, too big.
-          writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+          writeMapToFile(dumpDataMap, optimizedModelDataName);
         }
       }
     }
 
-    dumpDataMap = dumpDataMap.getDumpData();
+    // dumpDataMap = dumpDataMap.getDumpData();
     // 4, cmp
     console.log('Compare - Begin.');
     if (dumpOrCmp != 1) {
