@@ -121,22 +121,6 @@ function tensorDataTypeFromProto(typeProto) {
   }
 }
 
-export async function downloadWeights(arg) {
-  const response = await fetch(arg);
-  const buf = await response.arrayBuffer();
-  const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
-  for (const i of modelProto.graph.initializer) {
-    const tensor = {
-      'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
-      'dims': tensorDimsFromProto(i.dims),
-      'type': tensorDataTypeFromProto(i.dataType),
-    };
-    console.log(i.name + ',' + tensorDataTypeFromProto(i.dataType));
-    const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
-    writeObjectToFile(tensor, regName + '.json');
-  }
-}
-
 export async function setupWeights(map, arg) {
   const response = await fetch(arg);
   const buf = await response.arrayBuffer();
@@ -190,13 +174,17 @@ export async function getOptimizedModel(modelName, save = false) {
 }
 
 export class OnnxDumpData {
-  constructor(modelName) {
+  constructor(modelName, dumpOrCmp) {
     this.dumpDataMap = new Map();
     this.modelName = modelName;
+    this.optimizedModelBuffer = null;
+    this.useFile = dumpOrCmp != 0;
+    this.optimizedModelName = modelName + '-opt.json';
+    this.optimizedModelDataName = modelName + '-opt-data.json';
   }
 
-  async setupWeights(optimizedModelBuffer) {
-    const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
+  async setupWeights() {
+    const modelProto = onnx.ModelProto.decode(this.optimizedModelBuffer);
     for (const i of modelProto.graph.initializer) {
       const tensor = {
         'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
@@ -223,9 +211,95 @@ export class OnnxDumpData {
     }
   }
 
+  async setup(runTaskFn) {
+    window.dump = 2;
+    const optimizedModelBuffer = await this.getOptimizedModel();
+    const optimizedModelName = this.optimizedModelName;
+    window.dump = 0;
+    if (this.useFile) {
+      writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
+    }
+    // 2. Generate weights data.
+    console.log('Dump - Generate weights data.');
+    await this.setupWeights(optimizedModelBuffer);
+    console.log('Dump - Generate input output data.');
+    // 3, Generate other dump data: input, output.
+    window.dump = 1;
+    await runTaskFn('performance', 'wasm');
+    window.dump = 0;
+    await this.setupInputOutputs();
+  }
+
+  async getOptimizedModel() {
+    const modelName = this.modelName;
+    console.log('Dump - Optimize model begin.');
+    const modelDir = './ort-models/';
+    const graphOptimizationLevel = 'all';
+    const optimizedModelFilePath =
+        modelDir + modelName + '-' + graphOptimizationLevel + '.onnx';
+    let session;
+
+    try {
+      const option = {
+        executionProviders: [
+          {
+            name: 'wasm',
+          },
+        ],
+        graphOptimizationLevel: graphOptimizationLevel,
+        optimizedModelFilePath: optimizedModelFilePath,
+      };
+      session = await ort.InferenceSession.create(
+          modelDir + modelName + '.onnx', option);
+      console.log('Dump - Optimize model end.');
+
+    } catch (e) {
+      console.error(`Failed to inference ONNX model: ${e}.`);
+    }
+
+    console.log(window.optmizedModelBlobUrl);
+    const response = await fetch(window.optmizedModelBlobUrl);
+    const blob = await response.blob();
+    this.optimizedModelBuffer = new Uint8Array(await blob.arrayBuffer());
+    // await session.release();
+    return this.optimizedModelBuffer;
+  }
+
   save() {
-    writeObjectToFile(this.dumpDataMap, this.modelName + '-inputoutput.json');
-    return this.modelName + '-inputoutput';
+    // writeObjectToFile(this.dumpDataMap, this.modelName +
+    // '-inputoutput.json'); return this.modelName + '-inputoutput';
+    const optimizedModelDataName = this.optimizedModelDataName;
+    const modelName = this.modelName;
+    if (this.useFile) {
+      // writeObjectToFile works on mobilenet, not on albert.
+      if (modelName == 'mobilenetv2-12') {
+        writeMapToFile(this.getDumpData(), optimizedModelDataName);
+        // writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+      } else {
+        // For albert, too big.
+        writeMapToFile(this.getDumpData(), optimizedModelDataName);
+      }
+    }
+  }
+
+  async restore() {
+    if (this.useFile) {
+      console.log(this.optimizedModelName);
+      if (this.optimizedModelBuffer == null) {
+        this.optimizedModelBuffer =
+            await readObjectFromJson2(this.optimizedModelName);
+      }
+      console.log(this.optimizedModelBuffer);
+      // when cmp only, this means the dump data is from seperated file.
+      this.dumpDataMap = this.dumpOrCmp == 2 ?
+          null :
+          await readObjectFromFile(this.optimizedModelDataName);
+    }
+  }
+
+  async compare() {
+    const model = await loadModel(this.optimizedModelBuffer)
+        await compareModel(model, this.dumpDataMap, this.modelName);
   }
 
   getDumpData() {
@@ -320,7 +394,7 @@ function getOpset(opType, opsets) {
   return opset;
 }
 
-async function generateGraphPlan(node, dumpDataMap, modelName, model) {
+async function setupGraphPlan(node, dumpDataMap, modelName, model) {
   const nodePlan = {name: node.name};
   nodePlan.inputs = [];
   nodePlan.outputs = [];
@@ -425,8 +499,7 @@ function compareIgnoreType(reference, result) {
 }
 
 async function compareSingleNode(node, dumpDataMap, modelName, model) {
-  const graphPlan =
-      await generateGraphPlan(node, dumpDataMap, modelName, model);
+  const graphPlan = await setupGraphPlan(node, dumpDataMap, modelName, model);
   if (graphPlan == null) {
     return;
   }
@@ -480,64 +553,82 @@ export async function compareModel(model, dumpDataMap, modelName) {
 
 // dump(1)
 export async function dump(modelName, runTaskFn, dumpOrCmp) {
-  // const saveToFile = true;
-  // const enableDump = false;
-  let dumpDataMap;
-  let optimizedModelBuffer;
-  const optimizedModelName = modelName + '-opt.json';
-  const optimizedModelDataName = modelName + '-opt-data.json';
   // When dumpOrCmp: 0, dump and cmp not from file.
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
+  const useClass = true;
 
-  if (dumpOrCmp != 2) {
-    dumpDataMap = new OnnxDumpData(modelName);
-    // 1. Generate optimized onnx file.
-    window.dump = 2;
-    optimizedModelBuffer = await getOptimizedModel(modelName);
-    window.dump = 0;
-    if (useFile) {
-      writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
-    }
-    // 2. Generate weights data.
-    console.log('Dump - Generate weights data.');
-    await dumpDataMap.setupWeights(optimizedModelBuffer);
-    console.log('Dump - Generate input output data.');
-    // 3, Generate other dump data: input, output.
-    window.dump = 1;
-    await runTaskFn('performance', 'wasm');
-    window.dump = 0;
-    await dumpDataMap.setupInputOutputs();
-    console.log('Dump - End.');
-    if (useFile) {
-      // writeObjectToFile works on mobilenet, not on albert.
-      if (modelName == 'mobilenetv2-12') {
-        writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
-        // writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
-      } else {
-        // For albert, too big.
-        writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+  if (useClass) {
+    const dumpDataMap = new OnnxDumpData(modelName, dumpOrCmp);
+    if (dumpOrCmp != 2) {
+      await dumpDataMap.setup(runTaskFn);
+      if (useFile) {
+        dumpDataMap.save();
       }
     }
-    dumpDataMap = dumpDataMap.getDumpData();
-  }
-
-  // 4, cmp
-  console.log('Compare - Begin.');
-  if (dumpOrCmp != 1) {
-    if (useFile) {
-      console.log(optimizedModelName);
-      optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
-      console.log(optimizedModelBuffer);
-      // when cmp only, this means the dump data is from seperated file.
-      dumpDataMap = dumpOrCmp == 2 ?
-          null :
-          await readObjectFromFile(optimizedModelDataName);
+    if (dumpOrCmp != 1) {
+      console.log('Compare - Begin.');
+      if (useFile) {
+        await dumpDataMap.restore();
+      }
+      await dumpDataMap.compare();
+      console.log('Compare - End.');
     }
-    const model = await loadModel(optimizedModelBuffer);
-    console.log(model);
-    await compareModel(model, dumpDataMap, modelName);
+  } else {
+    let dumpDataMap;
+    let optimizedModelBuffer;
+    const optimizedModelName = modelName + '-opt.json';
+    const optimizedModelDataName = modelName + '-opt-data.json';
+    dumpDataMap = new OnnxDumpData(modelName);
+    if (dumpOrCmp != 2) {
+      // 1. Generate optimized onnx file.
+      window.dump = 2;
+      optimizedModelBuffer = await getOptimizedModel(modelName);
+      window.dump = 0;
+      if (useFile) {
+        writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
+      }
+      // 2. Generate weights data.
+      console.log('Dump - Generate weights data.');
+      await dumpDataMap.setupWeights(optimizedModelBuffer);
+      console.log('Dump - Generate input output data.');
+      // 3, Generate other dump data: input, output.
+      window.dump = 1;
+      await runTaskFn('performance', 'wasm');
+      window.dump = 0;
+      await dumpDataMap.setupInputOutputs();
+      console.log('Dump - End.');
+      if (useFile) {
+        // writeObjectToFile works on mobilenet, not on albert.
+        if (modelName == 'mobilenetv2-12') {
+          writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+          // writeObjectToFile(dumpDataMap.getDumpData(),
+          // optimizedModelDataName);
+        } else {
+          // For albert, too big.
+          writeMapToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
+        }
+      }
+    }
+
+    dumpDataMap = dumpDataMap.getDumpData();
+    // 4, cmp
+    console.log('Compare - Begin.');
+    if (dumpOrCmp != 1) {
+      if (useFile) {
+        console.log(optimizedModelName);
+        optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
+        console.log(optimizedModelBuffer);
+        // when cmp only, this means the dump data is from seperated file.
+        dumpDataMap = dumpOrCmp == 2 ?
+            null :
+            await readObjectFromFile(optimizedModelDataName);
+      }
+      const model = await loadModel(optimizedModelBuffer);
+      console.log(model);
+      await compareModel(model, dumpDataMap, modelName);
+      console.log('Compare - End.');
+    }
   }
-  console.log('Compare - End.');
 }
