@@ -40,7 +40,7 @@
   <link href="./ort-toolkit/sortable.min.css" rel="stylesheet" />
   <script src="./ort-toolkit/sortable.min.js"></script>
   <!--script src="./web_cmp/dist/ort.all.js"></script-->
-  <!--script  type="module" src="dump_util.js"></script-->
+  <!--script  type="module" src="dump.js"></script-->
   <style>
     .highlight {
       background-color: yellow;
@@ -48,8 +48,8 @@
   </style>
   <script type="module">
     'use strict';
-    // import * as dump_util from "./dump_util.js"
-    //import {} from from "./dump_util.js"
+    // import * as dump from "./dump.js"
+    //import {} from from "./dump.js"
     const disableBuffer = getParam('disableBuffer') === 'true' || true;
     const ep = getParam('ep') || 'webgpu';
     const layout = getParam('layout') || 'NHWC';
@@ -102,7 +102,7 @@
         binary = 'dump';
       }
       urls = [`./web_${binary}/dist/ort.all.js`];
-      // urls = urls.concat(['./dump_util.js']);
+      // urls = urls.concat(['./dump.js']);
       urls = urls.concat(['./ort-toolkit/models.js', './ort-toolkit/util.js']);
       for (let url of urls) {
         await loadScript(url);
@@ -111,10 +111,10 @@
 
     async function main() {
       await loadScript2();
-      const dump_util = await import('./dump_util.js');
+      const dump = await import('./dump.js');
       for (let task of tasks.split(',')) {
         if (task === 'dump') {
-          await dump_util.dump(modelName, runTask, getParam('dump')||0);
+          await dump.dump(modelName, runTask, getParam('dump')||0);
         } else if (task === 'conformance') {
           let epOutput = await runTask('conformance', ep);
           let cpuOutput = await runTask('conformance', 'wasm');
@@ -260,7 +260,7 @@
     async function loadScript(url) {
       return new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        if(url == "./dump_util.js") {
+        if(url == "./dump.js") {
           script.type = 'module';
         }
         script.onload = resolve;
