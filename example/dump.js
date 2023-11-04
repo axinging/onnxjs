@@ -232,13 +232,10 @@ export class OnnxDumpData {
 
     this.modelName = modelName;
 
-    this.optimizedModelName =
-        modelName + '-' + graphOptimizationLevel + '.json';
-    this.optimizedModelDataName =
-        modelName + '-' + graphOptimizationLevel + '-data.json';
-    this.modelDir =
-        './modeldata/' + modelName + '-' + graphOptimizationLevel + '/';
- 
+    const [modelDir, optimizedModelName, optimizedModelDataName] =
+        getDirInfo(modelName, graphOptimizationLevel);
+    Object.assign(this, {modelDir, optimizedModelName, optimizedModelDataName});
+
     this.model = null;
     this.graphOptimizationLevel = graphOptimizationLevel ?? 'all';
     this.dumpOrCmp = Number(dumpOrCmp);
