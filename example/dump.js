@@ -11,9 +11,9 @@ function sleep(ms) {
   return;
 }
 
-export function writeObjectToFile(json_object, name, time = 200) {
-  let object = json_object;
-  const file_name = name;
+export function writeObjectToFile(jsonObject, name, time = 200) {
+  let object = jsonObject;
+  const fileName = name;
   const a = document.createElement('a');
   if (object instanceof Map) {
     object = Object.fromEntries(object);
@@ -22,14 +22,14 @@ export function writeObjectToFile(json_object, name, time = 200) {
                                                     JSON.stringify(object);
   const file = new Blob([jsonStr], {type: 'application/json'});
   a.href = URL.createObjectURL(file);
-  a.download = file_name;
+  a.download = fileName;
   a.click();
   sleep(time);
 }
 
-export function writeMapToFile(json_object, name, time = 200) {
-  let object = json_object;
-  const file_name = name;
+export function writeMapToFile(jsonObject, name, time = 200) {
+  let object = jsonObject;
+  const fileName = name;
   const a = document.createElement('a');
   if (object instanceof Map) {
     // object = Object.fromEntries(object);
@@ -40,19 +40,54 @@ export function writeMapToFile(json_object, name, time = 200) {
   }
 }
 
-export function writeObjectToFile2(json_object, name, time = 200) {
-  let object = json_object;
-  const file_name = name;
+export function writeObjectToFile2(jsonObject, name, time = 200) {
+  let object = jsonObject;
+  const fileName = name;
   const a = document.createElement('a');
   if (object instanceof Map) {
     object = Object.fromEntries(object);
   }
   const file = new Blob([object], {type: 'application/json'});
   a.href = URL.createObjectURL(file);
-  a.download = file_name;
+  a.download = fileName;
   a.click();
   sleep(time);
 }
+
+export async function readObjectFromJson2(fileUrl) {
+  let response = await fetch(fileUrl);
+  const blob = await response.blob();
+  const arr = new Uint8Array(await blob.arrayBuffer());
+  return arr;
+}
+
+
+
+async function getDataFromJsonFile(modelName, fileUrl) {
+  const deviceName = '';  //'-9106';  //'-7779';
+                          // TODO: Fix constant node file not found.
+  const response =
+      await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
+  const json = await response.json();
+  if (json.type === 'float') {
+    json.type = 'float32';
+  }
+  return json;
+}
+
+BigInt.prototype.toJSON = function() {
+  return Number(this.toString());
+};
+
+function getParam(name) {
+  name = name.replace(/[\[\]]/g, '\\$&');
+  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
+  let results = regex.exec(window.location.href);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g, ' '));
+}
+
 
 export async function readObjectFromJson(fileUrl) {
   const response = await fetch(fileUrl);
@@ -83,6 +118,37 @@ export async function readObjectFromFile(fileUrl) {
 function tensorDimsFromProto(dims) {
   // get rid of Long type for dims
   return dims.map(d => Long.isLong(d) ? d.toNumber() : d);
+}
+
+// opset is array: [{domain: '', version: 8}, ]
+function getOpset(opType, opsets) {
+  let opset = {'domain': 'com.microsoft', 'version': 1};
+  if (opType === 'Add' || opType === 'Conv' || opType === 'Shape' ||
+      opType === 'Reshape' || opType === 'Gather' || opType === 'Unsqueeze' ||
+      opType === 'Concat' || opType === 'GlobalAveragePool' ||
+      opType === 'Slice' || opType === 'Cast' || opType === 'Softmax' ||
+      opType === 'MatMul' || opType === 'Sub' || opType === 'Mul' ||
+      opType === 'Add' || opType === 'Div' || opType === 'LayerNormalization' ||
+      opType === 'Transpose' || opType === 'Gemm' || opType === 'LeakyRelu' ||
+      opType === 'MaxPool' || opType === 'BatchNormalization') {
+    // {'domain': '', 'version': 12};
+    // BatchNormalization, opset = {'domain': '', 'version': 8};
+    opset.domain = '';
+  }
+
+  let versionFound = false;
+  for (const item of opsets) {
+    if (opset.domain === item.domain) {
+      opset.version = item.version;
+      versionFound = true;
+    }
+  }
+  if (!versionFound) {
+    throw new Error(
+        'Not find domain: ' + JSON.stringify(opset.domain) + ' in ' +
+        JSON.stringify(opsets));
+  }
+  return opset;
 }
 
 function tensorDataTypeFromProto(typeProto) {
@@ -121,70 +187,64 @@ function tensorDataTypeFromProto(typeProto) {
   }
 }
 
-export async function setupWeights(map, optimizedModelBuffer) {
-  // const response = await fetch(arg);
-  // const buf = await response.arrayBuffer();
-  // const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
-
-  const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
-  for (const i of modelProto.graph.initializer) {
-    const tensor = {
-      'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
-      'dims': tensorDimsFromProto(i.dims),
-      'type': tensorDataTypeFromProto(i.dataType),
-    };
-    console.log(i.name + ',' + tensorDataTypeFromProto(i.dataType));
-    const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
-    // writeObjectToFile(tensor, regName);
-    map.set(name, tensor);
-  }
-}
-// Get the input put data.
-export async function setupInputOutputs(dumpDataMap) {
-  if (window.dumpBlobUrlMap == null) {
-    throw new Error('window.dumpBlobUrlMap is NULL!');
-  }
-  const blobUrlMap = window.dumpBlobUrlMap;
-  for (const [key, value] of blobUrlMap.entries()) {
-    const blobObject = await readObjectFromFile(value);
-    // const arr = new Uint8Array(await blob.arrayBuffer());
-    dumpDataMap.set(key, blobObject);
-  }
+const onnxProto = ort.OnnxProto.onnx;
+async function runGraphPlan(graphPlan) {
+  // ort.env.debug = true
+  // ort.env.logLevel = 'verbose';
+  const case0 = graphPlan['cases'][0];
+  // TODO: outputs maybe array.
+  const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
+  const result = await onnxdecoder.runOnnxProtoOp(session, case0);
+  return result;
 }
 
-export async function getOptimizedModel(modelName, save = false) {
-  console.log('Dump - Optimize model begin.');
-  const modelDir = './ort-models/';
-  const graphOptimizationLevel = 'all';
-  const optmizedModelName = modelName + '-' + graphOptimizationLevel + '.onnx';
-  const optimizedModelFilePath = modelDir + optmizedModelName;
-  let session;
-
-  try {
-    const option = {
-      executionProviders: [
-        {
-          name: 'wasm',
-        },
-      ],
-      graphOptimizationLevel: graphOptimizationLevel,
-      optimizedModelFilePath: optimizedModelFilePath,
-    };
-    session = await ort.InferenceSession.create(
-        modelDir + modelName + '.onnx', option);
-    console.log('Dump - Optimize model end.');
-
-  } catch (e) {
-    console.error(`Failed to inference ONNX model: ${e}.`);
+export async function loadModel(arg, byteOffset, length) {
+  // const model = new onnx.Model();
+  const model = new ort.Model();
+  if (typeof arg === 'string') {
+    const isOrtFormat = arg.endsWith('.ort');
+    if (typeof process !== 'undefined' && process.versions &&
+        process.versions.node) {
+      // node
+      const buf = await readFile(arg);
+      model.load(buf);
+    } else {
+      // browser
+      const response = await fetch(arg);
+      const buf = await response.arrayBuffer();
+      model.load(new Uint8Array(buf));
+    }
+  } else if (!ArrayBuffer.isView(arg)) {
+    // load model from ArrayBuffer
+    const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
+    // this.initialize(arr);
+    model.load(arr);
+  } else {
+    model.load(arg);
   }
-
-  console.log(window.optmizedModelBlobUrl);
-  const response = await fetch(window.optmizedModelBlobUrl);
-  const blob = await response.blob();
-  const arr = new Uint8Array(await blob.arrayBuffer());
-  await session.release();
-  return arr;
+  return model;
 }
+
+function convertArrayToBigInt64Array(array) {
+  const bigint64array = new BigInt64Array(array.length);
+  for (var i = 0; i < array.length; i++) {
+    bigint64array[i] = BigInt(array[i]);
+  }
+  return bigint64array;
+}
+
+function compareIgnoreType(reference, result) {
+  const isResultInt64 = result instanceof BigInt64Array;
+  const referenceInt64 =
+      isResultInt64 ? convertArrayToBigInt64Array(reference) : reference;
+  if (isResultInt64) {
+    return (
+        JSON.stringify(referenceInt64.sort()) ===
+        JSON.stringify(result.sort()));
+  }
+  return compare(referenceInt64, Array.from(result));
+}
+
 
 export class OnnxDumpData {
   constructor(modelName, dumpOrCmp) {
@@ -195,6 +255,10 @@ export class OnnxDumpData {
     this.optimizedModelName = modelName + '-opt.json';
     this.optimizedModelDataName = modelName + '-opt-data.json';
     this.model = null;
+  }
+
+  release() {
+    this.dumpDataMap = null;
   }
 
   async setupWeights() {
@@ -284,14 +348,15 @@ export class OnnxDumpData {
     // '-inputoutput.json'); return this.modelName + '-inputoutput';
     const optimizedModelDataName = this.optimizedModelDataName;
     const modelName = this.modelName;
+    const dumpDataMap = this.dumpDataMap;
     if (this.useFile) {
       // writeObjectToFile works on mobilenet, not on albert.
       if (modelName == 'mobilenetv2-12') {
-        writeMapToFile(this.getDumpData(), optimizedModelDataName);
+        writeMapToFile(dumpDataMap, optimizedModelDataName);
         // writeObjectToFile(dumpDataMap.getDumpData(), optimizedModelDataName);
       } else {
         // For albert, too big.
-        writeMapToFile(this.getDumpData(), optimizedModelDataName);
+        writeMapToFile(dumpDataMap, optimizedModelDataName);
       }
     }
   }
@@ -313,16 +378,83 @@ export class OnnxDumpData {
 
   async compare() {
     this.model =
-        await loadModel(this.optimizedModelBuffer) await compareModel();
+        await loadModel(this.optimizedModelBuffer);
+    await this.compareModel();
   }
 
-  async compareSingleNode(node) {
+  async setupGraphPlan(node) {
     const dumpDataMap = this.dumpDataMap;
     const modelName = this.modelName;
     const model = this.model;
 
+    const nodePlan = {name: node.name};
+    nodePlan.inputs = [];
+    nodePlan.outputs = [];
+    const inputShapeDefinitions = [];
+    console.log(modelName + ', dump data ismap: ' + (dumpDataMap instanceof Map));
+    for (const inputName of node.inputNames) {
+      const inputData = await this.getData(inputName, node);
+      nodePlan.inputs.push(inputData);
+    }
+  
+    for (const outputName of node.outputNames) {
+      let outputData = await this.getData(outputName, node);
+      nodePlan.outputs.push(outputData);
+    }
+  
+    for (const input of nodePlan['inputs']) {
+      inputShapeDefinitions.push((input['dims']));
+    }
+    const attributs = [];
+    node.attributes._attributes.forEach((value, key) => {
+      attributs.push({'name': key, 'data': value[0], 'type': value[1]});
+    });
+  
+    const opset = getOpset(node.opType, model._opsets);
+    console.log(
+        node.opType + ', ' +
+        'domain: ' + JSON.stringify(opset));
+    const graphPlan = {
+      'name': node.opType,
+      'operator': node.opType,
+      'attributes': attributs,
+      'inputShapeDefinitions': inputShapeDefinitions,
+      'cases': [
+        nodePlan,
+      ],
+      'backend': getParam('ep') || 'webgpu',
+      'opset': opset,
+    };
+  
+    return graphPlan;
+  }
 
-    const graphPlan = await setupGraphPlan(node, dumpDataMap, modelName, model);
+  async getData(inputName, node) {
+    const dumpDataMap= this.dumpDataMap;
+    const modelName = this.modelName;
+    let data;
+    const isMap = dumpDataMap instanceof Map;
+    const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
+    try {
+      data = await getDataFromJsonFile(modelName, regName);
+    } catch (err) {
+      data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
+    } finally {
+      if (data == null) {
+        console.error(
+            ('Can not find input or output: ' + node.name + ', ' +
+             JSON.stringify(node)));
+        return null;
+      }
+      if (data.type === 'float') {
+        data.type = 'float32';
+      }
+    }
+    return data;
+  }
+
+  async compareSingleNode(node) {
+    const graphPlan = await this.setupGraphPlan(node);
     if (graphPlan == null) {
       return;
     }
@@ -358,8 +490,6 @@ export class OnnxDumpData {
     const modelName = this.modelName;
     const nodes = model.graph._nodes;
     let testNode = getParam('node');
-    // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
-    // testNode = 'Conv_4';
     if (testNode) {
       for (const node of nodes) {
         if (testNode && node.name === testNode) {
@@ -381,40 +511,6 @@ export class OnnxDumpData {
   getDumpData() {
     return this.dumpDataMap;
   }
-}
-
-export async function readObjectFromJson2(fileUrl) {
-  let response = await fetch(fileUrl);
-  const blob = await response.blob();
-  const arr = new Uint8Array(await blob.arrayBuffer());
-  return arr;
-}
-
-const onnxProto = ort.OnnxProto.onnx;
-
-async function getDataFromJsonFile(modelName, fileUrl) {
-  const deviceName = '';  //'-9106';  //'-7779';
-                          // TODO: Fix constant node file not found.
-  const response =
-      await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
-  const json = await response.json();
-  if (json.type === 'float') {
-    json.type = 'float32';
-  }
-  return json;
-}
-
-BigInt.prototype.toJSON = function() {
-  return Number(this.toString());
-};
-
-function getParam(name) {
-  name = name.replace(/[\[\]]/g, '\\$&');
-  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
-  let results = regex.exec(window.location.href);
-  if (!results) return null;
-  if (!results[2]) return '';
-  return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
 
 async function getData(inputName, node, dumpDataMap, modelName) {
@@ -439,36 +535,71 @@ async function getData(inputName, node, dumpDataMap, modelName) {
   return data;
 }
 
-// opset is array: [{domain: '', version: 8}, ]
-function getOpset(opType, opsets) {
-  let opset = {'domain': 'com.microsoft', 'version': 1};
-  if (opType === 'Add' || opType === 'Conv' || opType === 'Shape' ||
-      opType === 'Reshape' || opType === 'Gather' || opType === 'Unsqueeze' ||
-      opType === 'Concat' || opType === 'GlobalAveragePool' ||
-      opType === 'Slice' || opType === 'Cast' || opType === 'Softmax' ||
-      opType === 'MatMul' || opType === 'Sub' || opType === 'Mul' ||
-      opType === 'Add' || opType === 'Div' || opType === 'LayerNormalization' ||
-      opType === 'Transpose' || opType === 'Gemm' || opType === 'LeakyRelu' ||
-      opType === 'MaxPool' || opType === 'BatchNormalization') {
-    // {'domain': '', 'version': 12};
-    // BatchNormalization, opset = {'domain': '', 'version': 8};
-    opset.domain = '';
+export async function setupWeights(map, optimizedModelBuffer) {
+  // const response = await fetch(arg);
+  // const buf = await response.arrayBuffer();
+  // const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
+
+  const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
+  for (const i of modelProto.graph.initializer) {
+    const tensor = {
+      'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
+      'dims': tensorDimsFromProto(i.dims),
+      'type': tensorDataTypeFromProto(i.dataType),
+    };
+    console.log(i.name + ',' + tensorDataTypeFromProto(i.dataType));
+    const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
+    // writeObjectToFile(tensor, regName);
+    map.set(name, tensor);
+  }
+}
+// Get the input put data.
+export async function setupInputOutputs(dumpDataMap) {
+  if (window.dumpBlobUrlMap == null) {
+    throw new Error('window.dumpBlobUrlMap is NULL!');
+  }
+  const blobUrlMap = window.dumpBlobUrlMap;
+  for (const [key, value] of blobUrlMap.entries()) {
+    const blobObject = await readObjectFromFile(value);
+    // const arr = new Uint8Array(await blob.arrayBuffer());
+    dumpDataMap.set(key, blobObject);
+  }
+}
+
+export async function getOptimizedModel(modelName, save = false) {
+  console.log('Dump - Optimize model begin.');
+  const modelDir = './ort-models/';
+  const graphOptimizationLevel = 'all';
+  const optmizedModelName = modelName + '-' + graphOptimizationLevel + '.onnx';
+  const optimizedModelFilePath = modelDir + optmizedModelName;
+  let session;
+
+  try {
+    const option = {
+      executionProviders: [
+        {
+          name: 'wasm',
+        },
+      ],
+      graphOptimizationLevel: graphOptimizationLevel,
+      optimizedModelFilePath: optimizedModelFilePath,
+    };
+    session = await ort.InferenceSession.create(
+        modelDir + modelName + '.onnx', option);
+    console.log('Dump - Optimize model end.');
+
+  } catch (e) {
+    console.error(`Failed to inference ONNX model: ${e}.`);
   }
 
-  let versionFound = false;
-  for (const item of opsets) {
-    if (opset.domain === item.domain) {
-      opset.version = item.version;
-      versionFound = true;
-    }
-  }
-  if (!versionFound) {
-    throw new Error(
-        'Not find domain: ' + JSON.stringify(opset.domain) + ' in ' +
-        JSON.stringify(opsets));
-  }
-  return opset;
+  console.log(window.optmizedModelBlobUrl);
+  const response = await fetch(window.optmizedModelBlobUrl);
+  const blob = await response.blob();
+  const arr = new Uint8Array(await blob.arrayBuffer());
+  await session.release();
+  return arr;
 }
+
 
 async function setupGraphPlan(node, dumpDataMap, modelName, model) {
   const nodePlan = {name: node.name};
@@ -517,62 +648,6 @@ async function setupGraphPlan(node, dumpDataMap, modelName, model) {
   return graphPlan;
 }
 
-async function runGraphPlan(graphPlan) {
-  // ort.env.debug = true
-  // ort.env.logLevel = 'verbose';
-  const case0 = graphPlan['cases'][0];
-  // TODO: outputs maybe array.
-  const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
-  const result = await onnxdecoder.runOnnxProtoOp(session, case0);
-  return result;
-}
-
-export async function loadModel(arg, byteOffset, length) {
-  // const model = new onnx.Model();
-  const model = new ort.Model();
-  if (typeof arg === 'string') {
-    const isOrtFormat = arg.endsWith('.ort');
-    if (typeof process !== 'undefined' && process.versions &&
-        process.versions.node) {
-      // node
-      const buf = await readFile(arg);
-      model.load(buf);
-    } else {
-      // browser
-      const response = await fetch(arg);
-      const buf = await response.arrayBuffer();
-      model.load(new Uint8Array(buf));
-    }
-  } else if (!ArrayBuffer.isView(arg)) {
-    // load model from ArrayBuffer
-    const arr = new Uint8Array(arg, byteOffset || 0, length || arg.byteLength);
-    // this.initialize(arr);
-    model.load(arr);
-  } else {
-    model.load(arg);
-  }
-  return model;
-}
-
-function convertArrayToBigInt64Array(array) {
-  const bigint64array = new BigInt64Array(array.length);
-  for (var i = 0; i < array.length; i++) {
-    bigint64array[i] = BigInt(array[i]);
-  }
-  return bigint64array;
-}
-
-function compareIgnoreType(reference, result) {
-  const isResultInt64 = result instanceof BigInt64Array;
-  const referenceInt64 =
-      isResultInt64 ? convertArrayToBigInt64Array(reference) : reference;
-  if (isResultInt64) {
-    return (
-        JSON.stringify(referenceInt64.sort()) ===
-        JSON.stringify(result.sort()));
-  }
-  return compare(referenceInt64, Array.from(result));
-}
 
 async function compareSingleNode(node, dumpDataMap, modelName, model) {
   const graphPlan = await setupGraphPlan(node, dumpDataMap, modelName, model);
@@ -633,7 +708,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
-  const useClass = false;
+  const useClass = true;
 
   if (useClass) {
     const dumpDataMap = new OnnxDumpData(modelName, dumpOrCmp);
@@ -649,6 +724,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
         await dumpDataMap.restore();
       }
       await dumpDataMap.compare();
+      dumpDataMap.release();
       console.log('Compare - End.');
     }
   } else {
@@ -687,8 +763,6 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
         }
       }
     }
-
-    // dumpDataMap = dumpDataMap.getDumpData();
     // 4, cmp
     console.log('Compare - Begin.');
     if (dumpOrCmp != 1) {
