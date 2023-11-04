@@ -64,8 +64,7 @@ export async function readTypedArrayFromFile(fileUrl) {
 async function getDataFromJsonFile2(modelDir, fileUrl) {
   const deviceName = '';  //'-9106';  //'-7779';
                           // TODO: Fix constant node file not found.
-  const response =
-      await fetch(modelDir + fileUrl + '.json');
+  const response = await fetch(modelDir + fileUrl + '.json');
   const json = await response.json();
   if (json.type === 'float') {
     json.type = 'float32';
@@ -73,11 +72,10 @@ async function getDataFromJsonFile2(modelDir, fileUrl) {
   return json;
 }
 
-async function getDataFromJsonFile(modelName, fileUrl) {
+async function getDataFromJsonFile(modelDir, fileUrl) {
   const deviceName = '';  //'-9106';  //'-7779';
                           // TODO: Fix constant node file not found.
-  const response =
-      await fetch(`./modeldata/${modelName}${deviceName}/` + fileUrl + '.json');
+  const response = await fetch(modelDir + fileUrl + '.json');
   const json = await response.json();
   if (json.type === 'float') {
     json.type = 'float32';
@@ -240,10 +238,13 @@ export class OnnxDumpData {
     this.modelName = modelName;
     this.optimizedModelBuffer = null;
     this.useFile = dumpOrCmp != 0;
-    this.optimizedModelName = modelName + '-'  + graphOptimizationLevel +'.json';
-    this.optimizedModelDataName = modelName + '-' + graphOptimizationLevel + '-data.json';
+    this.optimizedModelName =
+        modelName + '-' + graphOptimizationLevel + '.json';
+    this.optimizedModelDataName =
+        modelName + '-' + graphOptimizationLevel + '-data.json';
     this.model = null;
-    this.modelDir = './modeldata/'+modelName + '-'  + graphOptimizationLevel + '/';
+    this.modelDir =
+        './modeldata/' + modelName + '-' + graphOptimizationLevel + '/';
     this.graphOptimizationLevel = graphOptimizationLevel ?? 'all';
     this.dumpOrCmp = Number(dumpOrCmp);
   }
@@ -356,14 +357,14 @@ export class OnnxDumpData {
     if (this.useFile) {
       console.log(this.optimizedModelName);
       if (this.optimizedModelBuffer == null) {
-        this.optimizedModelBuffer =
-            await readTypedArrayFromFile(this.modelDir + this.optimizedModelName);
+        this.optimizedModelBuffer = await readTypedArrayFromFile(
+            this.modelDir + this.optimizedModelName);
       }
       console.log(this.optimizedModelBuffer);
       // when cmp only, this means the dump data is from seperated file.
       this.dumpDataMap = this.dumpOrCmp == 2 ?
           null :
-          await readObjectFromFile(this.modelDir+this.optimizedModelDataName);
+          await readObjectFromFile(this.modelDir + this.optimizedModelDataName);
     }
   }
 
@@ -470,7 +471,10 @@ export class OnnxDumpData {
           compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
           graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
           JSON.stringify(graphPlan['inputShapeDefinitions']));
-      writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] +"-"+this.graphOptimizationLevel+ '.jsonc');
+      writeObjectToFile(
+          graphPlan,
+          graphPlan['cases'][0]['name'] + '-' + this.graphOptimizationLevel +
+              '.jsonc');
     }
     return [compareResult, compareInfo];
   }
@@ -504,12 +508,12 @@ export class OnnxDumpData {
   }
 }
 
-async function getData(inputName, node, dumpDataMap, modelName) {
+async function getData(inputName, node, dumpDataMap, modelDir) {
   let data;
   const isMap = dumpDataMap instanceof Map;
   const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
   try {
-    data = await getDataFromJsonFile(modelName, regName);
+    data = await getDataFromJsonFile(modelDir, regName);
   } catch (err) {
     data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
   } finally {
@@ -556,12 +560,14 @@ export async function setupInputOutputs(dumpDataMap) {
   }
 }
 
-export async function getOptimizedModel(modelName) {
+export async function getOptimizedModel(
+    modelDir, modelName, graphOptimizationLevel) {
   console.log('Dump - Optimize model begin.');
-  const modelDir = './ort-models/';
-  const graphOptimizationLevel = 'all';
-  const optmizedModelName = modelName + '-' + graphOptimizationLevel + '.onnx';
-  const optimizedModelFilePath = modelDir + optmizedModelName;
+  // const modelDir = './ort-models/';
+  // const graphOptimizationLevel = 'all';
+  const optimizedModelFilePath =
+      modelDir + modelName + '-' + graphOptimizationLevel + '.onnx';
+  ;
   let session;
 
   try {
@@ -586,23 +592,23 @@ export async function getOptimizedModel(modelName) {
   const response = await fetch(window.optmizedModelBlobUrl);
   const blob = await response.blob();
   const arr = new Uint8Array(await blob.arrayBuffer());
-  await session.release();
+  // await session.release();
   return arr;
 }
 
-async function setupGraphPlan(node, dumpDataMap, modelName, model) {
+async function setupGraphPlan(node, dumpDataMap, modelDir, modelName, model) {
   const nodePlan = {name: node.name};
   nodePlan.inputs = [];
   nodePlan.outputs = [];
   const inputShapeDefinitions = [];
   console.log(modelName + ', dump data ismap: ' + (dumpDataMap instanceof Map));
   for (const inputName of node.inputNames) {
-    const inputData = await getData(inputName, node, dumpDataMap, modelName);
+    const inputData = await getData(inputName, node, dumpDataMap, modelDir);
     nodePlan.inputs.push(inputData);
   }
 
   for (const outputName of node.outputNames) {
-    let outputData = await getData(outputName, node, dumpDataMap, modelName);
+    let outputData = await getData(outputName, node, dumpDataMap, modelDir);
     nodePlan.outputs.push(outputData);
   }
 
@@ -634,12 +640,14 @@ async function setupGraphPlan(node, dumpDataMap, modelName, model) {
 }
 
 
-async function compareSingleNode(node, dumpDataMap, modelName, model) {
-  const graphPlan = await setupGraphPlan(node, dumpDataMap, modelName, model);
+async function compareSingleNode(
+    node, dumpDataMap, modelDir, modelName, model) {
+  const graphPlan =
+      await setupGraphPlan(node, dumpDataMap, modelDir, modelName, model);
   if (graphPlan == null) {
     return;
   }
-  //console.log(JSON.stringify(graphPlan));
+  // console.log(JSON.stringify(graphPlan));
   const result1 = await runGraphPlan(graphPlan);
   let reference = graphPlan['cases'][0]['outputs'][0].data;
   const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
@@ -664,7 +672,7 @@ async function compareSingleNode(node, dumpDataMap, modelName, model) {
   return [compareResult, compareInfo];
 }
 
-export async function compareModel(model, dumpDataMap, modelName) {
+export async function compareModel(model, dumpDataMap, modelDir, modelName) {
   const nodes = model.graph._nodes;
   let testNode = getParam('node');
   // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
@@ -672,23 +680,35 @@ export async function compareModel(model, dumpDataMap, modelName) {
   if (testNode) {
     for (const node of nodes) {
       if (testNode && node.name === testNode) {
-        await compareSingleNode(node, dumpDataMap, modelName, model);
+        await compareSingleNode(node, dumpDataMap, modelDir, modelName, model);
         break;
       }
     }
   } else {
     const results = [];
     for (const node of nodes) {
-      const [compareResult, compareInfo] =
-          await compareSingleNode(node, dumpDataMap, modelName, model);
+      const [compareResult, compareInfo] = await compareSingleNode(
+          node, dumpDataMap, modelDir, modelName, model);
       results.push({'result': compareResult, 'info': compareInfo});
     }
     writeObjectToFile(results, modelName + '-results.json');
   }
 }
 
+function getDirInfo(modelName, graphOptimizationLevel) {
+  const optimizedModelName = modelName + '-' + graphOptimizationLevel + '.json';
+  const optimizedModelDataName =
+      modelName + '-' + graphOptimizationLevel + '-data.json';
+  // this.model = null;
+  const modelDir =
+      './modeldata/' + modelName + '-' + graphOptimizationLevel + '/';
+  return [modelDir, optimizedModelName, optimizedModelDataName];
+}
+
 // dump(1)
-export async function dump(modelName, runTaskFn, dumpOrCmp) {
+export async function dump(
+    modelName, runTaskFn, graphOptimizationLevel = 'disabled',
+    dumpOrCmp = '0') {
   // When dumpOrCmp: 0, dump and cmp not from file.
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
@@ -696,7 +716,8 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
   const useClass = false;
 
   if (useClass) {
-    const dumpDataMap = new OnnxDumpData(modelName, 'disabled', dumpOrCmp);
+    const dumpDataMap =
+        new OnnxDumpData(modelName, graphOptimizationLevel, dumpOrCmp);
     if (dumpOrCmp != 2) {
       await dumpDataMap.setup(runTaskFn);
       if (useFile) {
@@ -715,13 +736,23 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
   } else {
     let dumpDataMap;
     let optimizedModelBuffer;
-    const optimizedModelName = modelName + '-opt.json';
-    const optimizedModelDataName = modelName + '-opt-data.json';
+    // const optimizedModelName = modelName + '-opt.json';
+    // const optimizedModelDataName = modelName + '-opt-data.json';
+    graphOptimizationLevel = graphOptimizationLevel ?? 'disabled';
+    // const optimizedModelName = modelName + '-'  + graphOptimizationLevel
+    // +'.json'; const optimizedModelDataName = modelName + '-' +
+    // graphOptimizationLevel + '-data.json'; const modelDir =
+    // './modeldata/'+modelName + '-'  + graphOptimizationLevel + '/';
+
+    const [modelDir, optimizedModelName, optimizedModelDataName] =
+        getDirInfo(modelName, graphOptimizationLevel);
+
     dumpDataMap = new Map();
     if (dumpOrCmp != 2) {
       // 1. Generate optimized onnx file.
       window.dump = 2;
-      optimizedModelBuffer = await getOptimizedModel(modelName);
+      optimizedModelBuffer =
+          await getOptimizedModel(modelDir, modelName, graphOptimizationLevel);
       window.dump = 0;
       if (useFile) {
         writeTypedArrayToFile(optimizedModelBuffer, optimizedModelName);
@@ -753,16 +784,17 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     if (dumpOrCmp != 1) {
       if (useFile) {
         console.log(optimizedModelName);
-        optimizedModelBuffer = await readTypedArrayFromFile(optimizedModelName);
+        optimizedModelBuffer =
+            await readTypedArrayFromFile(modelDir + optimizedModelName);
         console.log(optimizedModelBuffer);
         // when cmp only, this means the dump data is from seperated file.
         dumpDataMap = dumpOrCmp == 2 ?
             null :
-            await readObjectFromFile(optimizedModelDataName);
+            await readObjectFromFile(modelDir + optimizedModelDataName);
       }
       const model = await loadModel(optimizedModelBuffer);
       console.log(model);
-      await compareModel(model, dumpDataMap, modelName);
+      await compareModel(model, dumpDataMap, modelDir, modelName);
       console.log('Compare - End.');
     }
   }

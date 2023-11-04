@@ -114,7 +114,7 @@
       const dump = await import('./dump.js');
       for (let task of tasks.split(',')) {
         if (task === 'dump') {
-          await dump.dump(modelName, runTask, getParam('dump')||0);
+          await dump.dump(modelName, runTask, getParam('optlevel')||'disabled', getParam('dump')||0);
         } else if (task === 'conformance') {
           let epOutput = await runTask('conformance', ep);
           let cpuOutput = await runTask('conformance', 'wasm');
