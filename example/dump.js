@@ -231,26 +231,36 @@ function compareIgnoreType(reference, result) {
   return compare(referenceInt64, Array.from(result));
 }
 
+function getDirInfo(modelName, graphOptimizationLevel) {
+  const optimizedModelName = modelName + '-' + graphOptimizationLevel + '.json';
+  const optimizedModelDataName =
+      modelName + '-' + graphOptimizationLevel + '-data.json';
+  const modelDir =
+      './modeldata/' + modelName + '-' + graphOptimizationLevel + '/';
+  return [modelDir, optimizedModelName, optimizedModelDataName];
+}
 
 export class OnnxDumpData {
   constructor(modelName, graphOptimizationLevel, dumpOrCmp) {
     this.dumpDataMap = new Map();
-    this.modelName = modelName;
     this.optimizedModelBuffer = null;
     this.useFile = dumpOrCmp != 0;
+
+    this.modelName = modelName;
     this.optimizedModelName =
         modelName + '-' + graphOptimizationLevel + '.json';
     this.optimizedModelDataName =
         modelName + '-' + graphOptimizationLevel + '-data.json';
-    this.model = null;
     this.modelDir =
         './modeldata/' + modelName + '-' + graphOptimizationLevel + '/';
+ 
+    this.model = null;
     this.graphOptimizationLevel = graphOptimizationLevel ?? 'all';
     this.dumpOrCmp = Number(dumpOrCmp);
   }
 
   release() {
-    this.dumpDataMap = null;
+    // TODO: 
   }
 
   async setupWeights() {
@@ -303,10 +313,8 @@ export class OnnxDumpData {
   async getOptimizedModel() {
     const modelName = this.modelName;
     console.log('Dump - Optimize model begin.');
-    const modelDir = './ort-models/';
     const graphOptimizationLevel = this.graphOptimizationLevel;
-    const optimizedModelFilePath =
-        modelDir + modelName + '-' + graphOptimizationLevel + '.onnx';
+    const optimizedModelFilePath = modelName + '-' + graphOptimizationLevel + '.onnx';
     let session;
 
     try {
@@ -695,17 +703,7 @@ export async function compareModel(model, dumpDataMap, modelDir, modelName) {
   }
 }
 
-function getDirInfo(modelName, graphOptimizationLevel) {
-  const optimizedModelName = modelName + '-' + graphOptimizationLevel + '.json';
-  const optimizedModelDataName =
-      modelName + '-' + graphOptimizationLevel + '-data.json';
-  // this.model = null;
-  const modelDir =
-      './modeldata/' + modelName + '-' + graphOptimizationLevel + '/';
-  return [modelDir, optimizedModelName, optimizedModelDataName];
-}
 
-// dump(1)
 export async function dump(
     modelName, runTaskFn, graphOptimizationLevel = 'disabled',
     dumpOrCmp = '0') {
