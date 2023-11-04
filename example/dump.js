@@ -60,21 +60,7 @@ export async function readTypedArrayFromFile(fileUrl) {
   return tyepdArray;
 }
 
-
-async function getDataFromJsonFile2(modelDir, fileUrl) {
-  const deviceName = '';  //'-9106';  //'-7779';
-                          // TODO: Fix constant node file not found.
-  const response = await fetch(modelDir + fileUrl + '.json');
-  const json = await response.json();
-  if (json.type === 'float') {
-    json.type = 'float32';
-  }
-  return json;
-}
-
 async function getDataFromJsonFile(modelDir, fileUrl) {
-  const deviceName = '';  //'-9106';  //'-7779';
-                          // TODO: Fix constant node file not found.
   const response = await fetch(modelDir + fileUrl + '.json');
   const json = await response.json();
   if (json.type === 'float') {
@@ -312,6 +298,7 @@ export class OnnxDumpData {
 
   async getOptimizedModel() {
     const modelName = this.modelName;
+    const modelDir = this.modelDir;
     console.log('Dump - Optimize model begin.');
     const graphOptimizationLevel = this.graphOptimizationLevel;
     const optimizedModelFilePath = modelName + '-' + graphOptimizationLevel + '.onnx';
@@ -431,12 +418,11 @@ export class OnnxDumpData {
 
   async getData(inputName, node) {
     const dumpDataMap = this.dumpDataMap;
-    const modelName = this.modelName;
     let data;
     const isMap = dumpDataMap instanceof Map;
     const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
     try {
-      data = await getDataFromJsonFile2(this.modelDir, regName);
+      data = await getDataFromJsonFile(this.modelDir, regName);
     } catch (err) {
       data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
     } finally {
@@ -458,7 +444,6 @@ export class OnnxDumpData {
     if (graphPlan == null) {
       return;
     }
-    // console.log(JSON.stringify(graphPlan));
     const result1 = await runGraphPlan(graphPlan);
     let reference = graphPlan['cases'][0]['outputs'][0].data;
     const compareResult =
@@ -711,7 +696,7 @@ export async function dump(
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
-  const useClass = false;
+  const useClass = true;
 
   if (useClass) {
     const dumpDataMap =
