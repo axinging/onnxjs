@@ -527,7 +527,7 @@ export async function setupWeights(map, optimizedModelBuffer) {
     console.log(i.name + ',' + tensorDataTypeFromProto(i.dataType));
     const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
     // writeObjectToFile(tensor, regName);
-    map.set(name, tensor);
+    map.set(regName, tensor);
   }
 }
 // Get the input put data.
@@ -680,7 +680,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
-  const useClass = true;
+  const useClass = false;
 
   if (useClass) {
     const dumpDataMap = new OnnxDumpData(modelName, dumpOrCmp);
