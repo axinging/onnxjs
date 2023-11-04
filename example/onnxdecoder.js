@@ -179,8 +179,8 @@ export async  function createOnnxModel(test, onnx) {
   return  session;
 }
 
-export async function runOnnxProtoOp(
-  session, testCase){
+export async function runOnnxProtoOp(graphPlan, session) {
+const testCase = graphPlan['cases'][0];
 const feeds = {};//: Record<string, ort.Tensor> = {};
 const fetches = [];//: string[] = [];
 testCase.inputs.forEach((input, i) => {

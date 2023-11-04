@@ -40,8 +40,8 @@ export function writeMapToFile(jsonObject, name, time = 200) {
   }
 }
 
-export function writeObjectToFile2(jsonObject, name, time = 200) {
-  let object = jsonObject;
+export function writeTypedArrayToFile(tyepdArray, name, time = 200) {
+  let object = tyepdArray;
   const fileName = name;
   const a = document.createElement('a');
   if (object instanceof Map) {
@@ -54,14 +54,12 @@ export function writeObjectToFile2(jsonObject, name, time = 200) {
   sleep(time);
 }
 
-export async function readObjectFromJson2(fileUrl) {
+export async function readTypedArrayFromFile(fileUrl) {
   let response = await fetch(fileUrl);
   const blob = await response.blob();
-  const arr = new Uint8Array(await blob.arrayBuffer());
-  return arr;
+  const tyepdArray = new Uint8Array(await blob.arrayBuffer());
+  return tyepdArray;
 }
-
-
 
 async function getDataFromJsonFile(modelName, fileUrl) {
   const deviceName = '';  //'-9106';  //'-7779';
@@ -86,26 +84,6 @@ function getParam(name) {
   if (!results) return null;
   if (!results[2]) return '';
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
-}
-
-
-export async function readObjectFromJson(fileUrl) {
-  const response = await fetch(fileUrl);
-  // const blob = await response.blob();
-  let blobObject;
-  try {
-    blobObject = await response.json();  // JSON.parse(await blob.text());
-  } catch (err) {
-    console.error(err);
-  }
-
-  try {
-    const text = await response.text();
-    console.log(JSON.parse(text));
-  } catch (err) {
-    console.error(err);
-  }
-  return blobObject;
 }
 
 export async function readObjectFromFile(fileUrl) {
@@ -187,18 +165,17 @@ function tensorDataTypeFromProto(typeProto) {
   }
 }
 
-const onnxProto = ort.OnnxProto.onnx;
 async function runGraphPlan(graphPlan) {
   // ort.env.debug = true
   // ort.env.logLevel = 'verbose';
-  const case0 = graphPlan['cases'][0];
+
   // TODO: outputs maybe array.
-  const session = (await onnxdecoder.createOnnxModel(graphPlan, onnxProto));
-  const result = await onnxdecoder.runOnnxProtoOp(session, case0);
+  const session = await onnxdecoder.createOnnxModel(graphPlan, onnx);
+  const result = await onnxdecoder.runOnnxProtoOp(graphPlan, session);
   return result;
 }
 
-export async function loadModel(arg, byteOffset, length) {
+export async function loadModel(arg) {
   // const model = new onnx.Model();
   const model = new ort.Model();
   if (typeof arg === 'string') {
@@ -295,7 +272,7 @@ export class OnnxDumpData {
     const optimizedModelName = this.optimizedModelName;
     window.dump = 0;
     if (this.useFile) {
-      writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
+      writeTypedArrayToFile(optimizedModelBuffer, optimizedModelName);
     }
     // 2. Generate weights data.
     console.log('Dump - Generate weights data.');
@@ -366,7 +343,7 @@ export class OnnxDumpData {
       console.log(this.optimizedModelName);
       if (this.optimizedModelBuffer == null) {
         this.optimizedModelBuffer =
-            await readObjectFromJson2(this.optimizedModelName);
+            await readTypedArrayFromFile(this.optimizedModelName);
       }
       console.log(this.optimizedModelBuffer);
       // when cmp only, this means the dump data is from seperated file.
@@ -377,8 +354,7 @@ export class OnnxDumpData {
   }
 
   async compare() {
-    this.model =
-        await loadModel(this.optimizedModelBuffer);
+    this.model = await loadModel(this.optimizedModelBuffer);
     await this.compareModel();
   }
 
@@ -391,17 +367,18 @@ export class OnnxDumpData {
     nodePlan.inputs = [];
     nodePlan.outputs = [];
     const inputShapeDefinitions = [];
-    console.log(modelName + ', dump data ismap: ' + (dumpDataMap instanceof Map));
+    console.log(
+        modelName + ', dump data ismap: ' + (dumpDataMap instanceof Map));
     for (const inputName of node.inputNames) {
       const inputData = await this.getData(inputName, node);
       nodePlan.inputs.push(inputData);
     }
-  
+
     for (const outputName of node.outputNames) {
       let outputData = await this.getData(outputName, node);
       nodePlan.outputs.push(outputData);
     }
-  
+
     for (const input of nodePlan['inputs']) {
       inputShapeDefinitions.push((input['dims']));
     }
@@ -409,7 +386,7 @@ export class OnnxDumpData {
     node.attributes._attributes.forEach((value, key) => {
       attributs.push({'name': key, 'data': value[0], 'type': value[1]});
     });
-  
+
     const opset = getOpset(node.opType, model._opsets);
     console.log(
         node.opType + ', ' +
@@ -425,12 +402,12 @@ export class OnnxDumpData {
       'backend': getParam('ep') || 'webgpu',
       'opset': opset,
     };
-  
+
     return graphPlan;
   }
 
   async getData(inputName, node) {
-    const dumpDataMap= this.dumpDataMap;
+    const dumpDataMap = this.dumpDataMap;
     const modelName = this.modelName;
     let data;
     const isMap = dumpDataMap instanceof Map;
@@ -566,7 +543,7 @@ export async function setupInputOutputs(dumpDataMap) {
   }
 }
 
-export async function getOptimizedModel(modelName, save = false) {
+export async function getOptimizedModel(modelName) {
   console.log('Dump - Optimize model begin.');
   const modelDir = './ort-models/';
   const graphOptimizationLevel = 'all';
@@ -599,7 +576,6 @@ export async function getOptimizedModel(modelName, save = false) {
   await session.release();
   return arr;
 }
-
 
 async function setupGraphPlan(node, dumpDataMap, modelName, model) {
   const nodePlan = {name: node.name};
@@ -639,10 +615,6 @@ async function setupGraphPlan(node, dumpDataMap, modelName, model) {
     ],
     'backend': getParam('ep') || 'webgpu',
     'opset': opset,
-    // TODO: fix opsetImport
-    // 'opsetImport': model._opsets,
-    //"opset":
-    //[{"domain":"","version":12},{"domain":"com.microsoft.nchwc","version":1},{"domain":"ai.onnx.ml","version":3},{"domain":"com.ms.internal.nhwc","version":19},{"domain":"ai.onnx.training","version":1},{"domain":"ai.onnx.preview.training","version":1},{"domain":"com.microsoft","version":1},{"domain":"com.microsoft.experimental","version":1},{"domain":"org.pytorch.aten","version":1}]
   };
 
   return graphPlan;
@@ -739,7 +711,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
       optimizedModelBuffer = await getOptimizedModel(modelName);
       window.dump = 0;
       if (useFile) {
-        writeObjectToFile2(optimizedModelBuffer, optimizedModelName);
+        writeTypedArrayToFile(optimizedModelBuffer, optimizedModelName);
       }
       // 2. Generate weights data.
       console.log('Dump - Generate weights data.');
@@ -768,7 +740,7 @@ export async function dump(modelName, runTaskFn, dumpOrCmp) {
     if (dumpOrCmp != 1) {
       if (useFile) {
         console.log(optimizedModelName);
-        optimizedModelBuffer = await readObjectFromJson2(optimizedModelName);
+        optimizedModelBuffer = await readTypedArrayFromFile(optimizedModelName);
         console.log(optimizedModelBuffer);
         // when cmp only, this means the dump data is from seperated file.
         dumpDataMap = dumpOrCmp == 2 ?
