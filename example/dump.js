@@ -60,8 +60,8 @@ export async function readTypedArrayFromFile(fileUrl) {
   return tyepdArray;
 }
 
-async function getDataFromJsonFile(modelDir, fileUrl) {
-  const response = await fetch(modelDir + fileUrl + '.json');
+async function readFromJsonFile(fileUrl) {
+  const response = await fetch(fileUrl);
   const json = await response.json();
   if (json.type === 'float') {
     json.type = 'float32';
@@ -105,8 +105,6 @@ function getOpset(opType, opsets) {
       opType === 'Add' || opType === 'Div' || opType === 'LayerNormalization' ||
       opType === 'Transpose' || opType === 'Gemm' || opType === 'LeakyRelu' ||
       opType === 'MaxPool' || opType === 'BatchNormalization') {
-    // {'domain': '', 'version': 12};
-    // BatchNormalization, opset = {'domain': '', 'version': 8};
     opset.domain = '';
   }
 
@@ -233,6 +231,7 @@ export class OnnxDumpData {
     this.useFile = dumpOrCmp != 0;
 
     this.modelName = modelName;
+
     this.optimizedModelName =
         modelName + '-' + graphOptimizationLevel + '.json';
     this.optimizedModelDataName =
@@ -422,7 +421,7 @@ export class OnnxDumpData {
     const isMap = dumpDataMap instanceof Map;
     const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
     try {
-      data = await getDataFromJsonFile(this.modelDir, regName);
+      data = await readFromJsonFile(this.modelDir + regName  + '.json');
     } catch (err) {
       data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
     } finally {
@@ -506,7 +505,7 @@ async function getData(inputName, node, dumpDataMap, modelDir) {
   const isMap = dumpDataMap instanceof Map;
   const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
   try {
-    data = await getDataFromJsonFile(modelDir, regName);
+    data = await readFromJsonFile(modelDir + regName + '.json');
   } catch (err) {
     data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
   } finally {
@@ -696,7 +695,8 @@ export async function dump(
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
-  const useClass = true;
+  const useClass = getParam('useclass') == 'false' ? false : true;
+  console.log("useclass = " + useClass);
 
   if (useClass) {
     const dumpDataMap =
