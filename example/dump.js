@@ -228,8 +228,9 @@ export class OnnxDumpData {
   constructor(modelName, graphOptimizationLevel, dumpOrCmp) {
     this.dumpDataMap = new Map();
     this.optimizedModelBuffer = null;
+    this.graphOptimizationLevel = graphOptimizationLevel ?? 'all';
+    this.dumpOrCmp = Number(dumpOrCmp);
     this.useFile = dumpOrCmp != 0;
-
     this.modelName = modelName;
 
     const [modelDir, optimizedModelName, optimizedModelDataName] =
@@ -237,8 +238,6 @@ export class OnnxDumpData {
     Object.assign(this, {modelDir, optimizedModelName, optimizedModelDataName});
 
     this.model = null;
-    this.graphOptimizationLevel = graphOptimizationLevel ?? 'all';
-    this.dumpOrCmp = Number(dumpOrCmp);
   }
 
   release() {
