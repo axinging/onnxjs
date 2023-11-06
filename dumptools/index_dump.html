@@ -48,8 +48,6 @@
   </style>
   <script type="module">
     'use strict';
-    // import * as dump from "./dump.js"
-    //import {} from from "./dump.js"
     const disableBuffer = getParam('disableBuffer') === 'true' || true;
     const ep = getParam('ep') || 'webgpu';
     const layout = getParam('layout') || 'NHWC';
@@ -129,7 +127,7 @@
 
     // For ortProfiling, session.endProfiling will dump results of all runs, so we couldn't have a session run multiple times.
     // For webgpuProfiling, layout conversion is done in first run, so we need to collect data of second run.
-    async function runTask(task, ep) {
+    async function runTask(task, ep, modelUrl) {
       let modelBuffer;
       let oldConsoleLog;
       let session;
