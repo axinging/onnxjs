@@ -1,13 +1,5 @@
 import Long from 'https://cdn.jsdelivr.net/npm/long@5.2.3/index.js';
 
-/* 
-Usage:
-
-
-Known bug: 
-mobilenetv2-12-disabled not work.
-*/
-
 const onnx = ort.OnnxProto.onnx;
 
 async function createOnnxModel(test) {
@@ -480,7 +472,7 @@ export class OnnxDumpData {
   }
 
   release() {
-    // TODO: 
+    // TODO:
   }
 
   async setupWeights() {
@@ -492,7 +484,7 @@ export class OnnxDumpData {
         'type': tensorDataTypeFromProto(i.dataType),
       };
       const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
-      console.log("namedebug: " + regName);
+      console.log('namedebug: ' + regName);
       // writeObjectToFile(tensor, regName);
       this.dumpDataMap.set(regName, tensor);
       ;
@@ -506,7 +498,7 @@ export class OnnxDumpData {
     }
     const blobUrlMap = window.dumpBlobUrlMap;
     for (const [key, value] of blobUrlMap.entries()) {
-      console.log("namedebug: " + key);
+      console.log('namedebug: ' + key);
       const blobObject = await readObjectFromFile(value);
       // const arr = new Uint8Array(await blob.arrayBuffer());
       this.dumpDataMap.set(key, blobObject);
@@ -537,7 +529,8 @@ export class OnnxDumpData {
     const modelDir = this.modelDir;
     console.log('Dump - Optimize model begin.');
     const graphOptimizationLevel = this.graphOptimizationLevel;
-    const optimizedModelFilePath = modelName + '-' + graphOptimizationLevel + '.onnx';
+    const optimizedModelFilePath =
+        modelName + '-' + graphOptimizationLevel + '.onnx';
     let session;
 
     try {
@@ -658,7 +651,7 @@ export class OnnxDumpData {
     const isMap = dumpDataMap instanceof Map;
     const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
     try {
-      data = await readFromJsonFile(this.modelDir + regName  + '.json');
+      data = await readFromJsonFile(this.modelDir + regName + '.json');
     } catch (err) {
       data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
     } finally {
@@ -737,193 +730,13 @@ export class OnnxDumpData {
   }
 }
 
-async function getData(inputName, node, dumpDataMap, modelDir) {
-  let data;
-  const isMap = dumpDataMap instanceof Map;
-  const regName = inputName.replace(/\//g, '_').replace(/:/g, '_');
-  try {
-    data = await readFromJsonFile(modelDir + regName + '.json');
-  } catch (err) {
-    data = isMap ? dumpDataMap.get(regName) : dumpDataMap[regName];
-  } finally {
-    if (data == null) {
-      console.error(
-          ('Can not find input or output: ' + node.name + ', ' +
-           JSON.stringify(node)));
-      return null;
-    }
-    if (data.type === 'float') {
-      data.type = 'float32';
-    }
-  }
-  return data;
-}
-
-export async function setupWeights(map, optimizedModelBuffer) {
-  // const response = await fetch(arg);
-  // const buf = await response.arrayBuffer();
-  // const modelProto = onnx.ModelProto.decode(new Uint8Array(buf));
-
-  const modelProto = onnx.ModelProto.decode(optimizedModelBuffer);
-  for (const i of modelProto.graph.initializer) {
-    const tensor = {
-      'data': Array.from(ort.JsTensor.Tensor.fromProto(i).data),
-      'dims': tensorDimsFromProto(i.dims),
-      'type': tensorDataTypeFromProto(i.dataType),
-    };
-    const regName = i.name.replace(/\//g, '_').replace(/:/g, '_');
-    map.set(regName, tensor);
-  }
-}
-
-// Get the input put data.
-export async function setupInputOutputs(dumpDataMap) {
-  if (window.dumpBlobUrlMap == null) {
-    throw new Error('window.dumpBlobUrlMap is NULL!');
-  }
-  const blobUrlMap = window.dumpBlobUrlMap;
-  for (const [key, value] of blobUrlMap.entries()) {
-    const blobObject = await readObjectFromFile(value);
-    // const arr = new Uint8Array(await blob.arrayBuffer());
-    dumpDataMap.set(key, blobObject);
-  }
-}
-
-export async function getOptimizedModel(
-    modelDir, modelName, graphOptimizationLevel) {
-  console.log('Dump - Optimize model begin.');
-  // const modelDir = './ort-models/';
-  // const graphOptimizationLevel = 'all';
-  const optimizedModelFilePath =
-      modelDir + modelName + '-' + graphOptimizationLevel + '.onnx';
-  ;
-  let session;
-
-  try {
-    const option = {
-      executionProviders: [
-        {
-          name: 'wasm',
-        },
-      ],
-      graphOptimizationLevel: graphOptimizationLevel,
-      optimizedModelFilePath: optimizedModelFilePath,
-    };
-    session = await ort.InferenceSession.create(
-        modelDir + modelName + '.onnx', option);
-    console.log('Dump - Optimize model end.');
-
-  } catch (e) {
-    console.error(`Failed to inference ONNX model: ${e}.`);
-  }
-
-  console.log(window.optmizedModelBlobUrl);
-  const response = await fetch(window.optmizedModelBlobUrl);
-  const blob = await response.blob();
-  const arr = new Uint8Array(await blob.arrayBuffer());
-  // await session.release();
-  return arr;
-}
-
-async function setupGraphPlan(node, dumpDataMap, modelDir, modelName, model) {
-  const nodePlan = {name: node.name};
-  nodePlan.inputs = [];
-  nodePlan.outputs = [];
-  const inputShapeDefinitions = [];
-  console.log(modelName + ', dump data ismap: ' + (dumpDataMap instanceof Map));
-  for (const inputName of node.inputNames) {
-    const inputData = await getData(inputName, node, dumpDataMap, modelDir);
-    nodePlan.inputs.push(inputData);
-  }
-
-  for (const outputName of node.outputNames) {
-    let outputData = await getData(outputName, node, dumpDataMap, modelDir);
-    nodePlan.outputs.push(outputData);
-  }
-
-  for (const input of nodePlan['inputs']) {
-    inputShapeDefinitions.push((input['dims']));
-  }
-  const attributs = [];
-  node.attributes._attributes.forEach((value, key) => {
-    attributs.push({'name': key, 'data': value[0], 'type': value[1]});
-  });
-
-  const opset = getOpset(node.opType, model._opsets);
-  console.log(
-      node.opType + ', ' +
-      'domain: ' + JSON.stringify(opset));
-  const graphPlan = {
-    'name': node.opType,
-    'operator': node.opType,
-    'attributes': attributs,
-    'inputShapeDefinitions': inputShapeDefinitions,
-    'cases': [
-      nodePlan,
-    ],
-    'backend': getParam('ep') || 'webgpu',
-    'opset': opset,
-  };
-
-  return graphPlan;
-}
+/*
+Usage:
 
 
-async function compareSingleNode(
-    node, dumpDataMap, modelDir, modelName, model) {
-  const graphPlan =
-      await setupGraphPlan(node, dumpDataMap, modelDir, modelName, model);
-  if (graphPlan == null) {
-    return;
-  }
-  // console.log(JSON.stringify(graphPlan));
-  const result1 = await runGraphPlan(graphPlan);
-  let reference = graphPlan['cases'][0]['outputs'][0].data;
-  const compareResult = compareIgnoreType(reference, result1.output_0.cpuData);
-  const compareInfo = 'Wasm vs ' + graphPlan['backend'] +
-      ', compare result=' + compareResult + ',' + graphPlan['name'] + ', ' +
-      graphPlan['cases'][0]['name'];
-  if (compareResult) {
-    console.log(compareInfo);
-    // writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + ".jsonc");
-  } else {
-    console.log('Compare reference : ' + JSON.stringify(reference));
-    console.log(
-        'Compare result : ' +
-        JSON.stringify(Array.from(result1.output_0.cpuData)));
-    console.error(
-        'Wasm vs ' + graphPlan['backend'] + ', compare result=' +
-        compareResult + ', failed node: ' + graphPlan['name'] + ', ' +
-        graphPlan['cases'][0]['name'] + ', inputShapeDefinitions = ' +
-        JSON.stringify(graphPlan['inputShapeDefinitions']));
-    writeObjectToFile(graphPlan, graphPlan['cases'][0]['name'] + '.jsonc');
-  }
-  return [compareResult, compareInfo];
-}
-
-export async function compareModel(model, dumpDataMap, modelDir, modelName) {
-  const nodes = model.graph._nodes;
-  let testNode = getParam('node');
-  // "/albert/encoder/albert_layer_groups.0/albert_layers.0/attention/query/MatMul"
-  // testNode = 'Conv_4';
-  if (testNode) {
-    for (const node of nodes) {
-      if (testNode && node.name === testNode) {
-        await compareSingleNode(node, dumpDataMap, modelDir, modelName, model);
-        break;
-      }
-    }
-  } else {
-    const results = [];
-    for (const node of nodes) {
-      const [compareResult, compareInfo] = await compareSingleNode(
-          node, dumpDataMap, modelDir, modelName, model);
-      results.push({'result': compareResult, 'info': compareInfo});
-    }
-    writeObjectToFile(results, modelName + '-results.json');
-  }
-}
-
+Known bug:
+mobilenetv2-12-disabled not work.
+*/
 
 export async function dump(
     modelName, runTaskFn, graphOptimizationLevel = 'disabled',
@@ -932,84 +745,21 @@ export async function dump(
   // 1, dump data to file; 2, cmp based on file.
   const useFile = dumpOrCmp != 0;
 
-  const useClass = getParam('useclass') == 'false' ? false : true;
-  console.log("useclass = " + useClass);
-
-  if (useClass) {
-    const dumpDataMap =
-        new OnnxDumpData(modelName, graphOptimizationLevel, dumpOrCmp);
-    if (dumpOrCmp != 2) {
-      await dumpDataMap.setup(runTaskFn);
-      if (useFile) {
-        dumpDataMap.save();
-      }
+  const dumpDataMap =
+      new OnnxDumpData(modelName, graphOptimizationLevel, dumpOrCmp);
+  if (dumpOrCmp != 2) {
+    await dumpDataMap.setup(runTaskFn);
+    if (useFile) {
+      dumpDataMap.save();
     }
-    if (dumpOrCmp != 1) {
-      console.log('Compare - Begin.');
-      if (useFile) {
-        await dumpDataMap.restore();
-      }
-      await dumpDataMap.compare();
-      dumpDataMap.release();
-      console.log('Compare - End.');
-    }
-  } else {
-    let dumpDataMap;
-    let optimizedModelBuffer;
-    graphOptimizationLevel = graphOptimizationLevel ?? 'disabled';
-
-    const [modelDir, optimizedModelName, optimizedModelDataName] =
-        getDirInfo(modelName, graphOptimizationLevel);
-
-    dumpDataMap = new Map();
-    if (dumpOrCmp != 2) {
-      // 1. Generate optimized onnx file.
-      window.dump = 2;
-      optimizedModelBuffer =
-          await getOptimizedModel(modelDir, modelName, graphOptimizationLevel);
-      window.dump = 0;
-      if (useFile) {
-        writeTypedArrayToFile(optimizedModelBuffer, optimizedModelName);
-      }
-      // 2. Generate weights data.
-      console.log('Dump - Generate weights data.');
-      await setupWeights(dumpDataMap, optimizedModelBuffer);
-      console.log('Dump - Generate input output data.');
-      // 3, Generate other dump data: input, output.
-      window.dump = 1;
-      await runTaskFn('performance', 'wasm');
-      window.dump = 0;
-      await setupInputOutputs(dumpDataMap);
-      console.log('Dump - End.');
-      if (useFile) {
-        // writeObjectToFile works on mobilenet, not on albert.
-        if (modelName == 'mobilenetv2-12') {
-          writeMapToFile(dumpDataMap, optimizedModelDataName);
-          // writeObjectToFile(dumpDataMap.getDumpData(),
-          // optimizedModelDataName);
-        } else {
-          // For albert, too big.
-          writeMapToFile(dumpDataMap, optimizedModelDataName);
-        }
-      }
-    }
-    // 4, cmp
+  }
+  if (dumpOrCmp != 1) {
     console.log('Compare - Begin.');
-    if (dumpOrCmp != 1) {
-      if (useFile) {
-        console.log(optimizedModelName);
-        optimizedModelBuffer =
-            await readTypedArrayFromFile(modelDir + optimizedModelName);
-        console.log(optimizedModelBuffer);
-        // when cmp only, this means the dump data is from seperated file.
-        dumpDataMap = dumpOrCmp == 2 ?
-            null :
-            await readObjectFromFile(modelDir + optimizedModelDataName);
-      }
-      const model = await loadModel(optimizedModelBuffer);
-      console.log(model);
-      await compareModel(model, dumpDataMap, modelDir, modelName);
-      console.log('Compare - End.');
+    if (useFile) {
+      await dumpDataMap.restore();
     }
+    await dumpDataMap.compare();
+    dumpDataMap.release();
+    console.log('Compare - End.');
   }
 }
