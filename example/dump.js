@@ -956,13 +956,7 @@ export async function dump(
   } else {
     let dumpDataMap;
     let optimizedModelBuffer;
-    // const optimizedModelName = modelName + '-opt.json';
-    // const optimizedModelDataName = modelName + '-opt-data.json';
     graphOptimizationLevel = graphOptimizationLevel ?? 'disabled';
-    // const optimizedModelName = modelName + '-'  + graphOptimizationLevel
-    // +'.json'; const optimizedModelDataName = modelName + '-' +
-    // graphOptimizationLevel + '-data.json'; const modelDir =
-    // './modeldata/'+modelName + '-'  + graphOptimizationLevel + '/';
 
     const [modelDir, optimizedModelName, optimizedModelDataName] =
         getDirInfo(modelName, graphOptimizationLevel);
