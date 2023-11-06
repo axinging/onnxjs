@@ -757,8 +757,7 @@ export class OnnxDumpData {
 export async function dump(
     modelName, onnxModelInferenceFn, graphOptimizationLevel = 'disabled',
     dumpOrCmp = '0') {
-  // When dumpOrCmp: 0, dump and cmp not from file.
-  // 1, dump data to file; 2, cmp based on file.
+
   const useFile = dumpOrCmp != 0;
 
   const dumpDataMap =
