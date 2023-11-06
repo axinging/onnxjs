@@ -479,6 +479,8 @@ export class OnnxDumpData {
     Object.assign(this, {modelDir, optimizedModelName, optimizedModelDataName});
     // Type ort.Model.
     this.model = null;
+    this.referenceBackend = 'wasm';
+    this.actualBackend = getParam('ep') || 'webgpu';
   }
 
   release() {
@@ -528,7 +530,7 @@ export class OnnxDumpData {
     console.log('Dump - Generate input output data.');
     // Generate other dump data: input, output.
     window.dump = 1;
-    await onnxModelInferenceFn('performance', 'wasm');
+    await onnxModelInferenceFn('performance', this.referenceBackend);
     window.dump = 0;
     await this.setupInputOutputs();
   }
@@ -546,7 +548,7 @@ export class OnnxDumpData {
       const option = {
         executionProviders: [
           {
-            name: 'wasm',
+            name: this.referenceBackend,
           },
         ],
         graphOptimizationLevel: graphOptimizationLevel,
@@ -639,7 +641,7 @@ export class OnnxDumpData {
       'cases': [
         nodePlan,
       ],
-      'backend': getParam('ep') || 'webgpu',
+      'backend': this.actualBackend,
       'opset': opset,
     };
 
