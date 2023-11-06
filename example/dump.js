@@ -1,6 +1,95 @@
-import Long from 'https://cdn.jsdelivr.net/npm/long@5.2.3/index.js';
-
 const onnx = ort.OnnxProto.onnx;
+
+// From 'https://cdn.jsdelivr.net/npm/long@5.2.3/index.js';
+function isLong(obj) {
+  return (obj && obj['__isLong__']) === true;
+}
+
+function sleep(ms) {
+  let start = new Date().getTime();
+  let expire = start + ms;
+  while (new Date().getTime() < expire) {
+  }
+  return;
+}
+
+function writeObjectToFile(jsonObject, name, time = 200) {
+  let object = jsonObject;
+  const fileName = name;
+  const a = document.createElement('a');
+  if (object instanceof Map) {
+    object = Object.fromEntries(object);
+  }
+  let jsonStr = name.split('.').pop() === 'jsonc' ? JSON.stringify([object]) :
+                                                    JSON.stringify(object);
+  const file = new Blob([jsonStr], {type: 'application/json'});
+  a.href = URL.createObjectURL(file);
+  a.download = fileName;
+  a.click();
+  sleep(time);
+}
+
+function writeMapToFile(jsonObject, name, time = 200) {
+  let object = jsonObject;
+  const fileName = name;
+  const a = document.createElement('a');
+  if (object instanceof Map) {
+    for (let [key, value] of object) {
+      // console.log(key + ' = ' + value);
+      writeObjectToFile(value, key + '.json');
+    }
+  }
+}
+
+function writeTypedArrayToFile(tyepdArray, name, time = 200) {
+  let object = tyepdArray;
+  const fileName = name;
+  const a = document.createElement('a');
+  if (object instanceof Map) {
+    object = Object.fromEntries(object);
+  }
+  const file = new Blob([object], {type: 'application/json'});
+  a.href = URL.createObjectURL(file);
+  a.download = fileName;
+  a.click();
+  sleep(time);
+}
+
+async function readTypedArrayFromFile(fileUrl) {
+  let response = await fetch(fileUrl);
+  const blob = await response.blob();
+  const tyepdArray = new Uint8Array(await blob.arrayBuffer());
+  return tyepdArray;
+}
+
+async function readFromJsonFile(fileUrl) {
+  const response = await fetch(fileUrl);
+  const json = await response.json();
+  if (json.type === 'float') {
+    json.type = 'float32';
+  }
+  return json;
+}
+
+BigInt.prototype.toJSON = function() {
+  return Number(this.toString());
+};
+
+function getParam(name) {
+  name = name.replace(/[\[\]]/g, '\\$&');
+  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
+  let results = regex.exec(window.location.href);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g, ' '));
+}
+
+async function readObjectFromFile(fileUrl) {
+  const response = await fetch(fileUrl);
+  const blob = await response.blob();
+  const blobObject = JSON.parse(await blob.text());
+  return blobObject;
+}
 
 async function createOnnxModel(test) {
   // const onnx = onnx;
@@ -234,95 +323,9 @@ const tensorDataTypeStringToEnum = (type) => {
   }
 };
 
-function sleep(ms) {
-  let start = new Date().getTime();
-  let expire = start + ms;
-  while (new Date().getTime() < expire) {
-  }
-  return;
-}
-
-function writeObjectToFile(jsonObject, name, time = 200) {
-  let object = jsonObject;
-  const fileName = name;
-  const a = document.createElement('a');
-  if (object instanceof Map) {
-    object = Object.fromEntries(object);
-  }
-  let jsonStr = name.split('.').pop() === 'jsonc' ? JSON.stringify([object]) :
-                                                    JSON.stringify(object);
-  const file = new Blob([jsonStr], {type: 'application/json'});
-  a.href = URL.createObjectURL(file);
-  a.download = fileName;
-  a.click();
-  sleep(time);
-}
-
-function writeMapToFile(jsonObject, name, time = 200) {
-  let object = jsonObject;
-  const fileName = name;
-  const a = document.createElement('a');
-  if (object instanceof Map) {
-    for (let [key, value] of object) {
-      // console.log(key + ' = ' + value);
-      writeObjectToFile(value, key + '.json');
-    }
-  }
-}
-
-function writeTypedArrayToFile(tyepdArray, name, time = 200) {
-  let object = tyepdArray;
-  const fileName = name;
-  const a = document.createElement('a');
-  if (object instanceof Map) {
-    object = Object.fromEntries(object);
-  }
-  const file = new Blob([object], {type: 'application/json'});
-  a.href = URL.createObjectURL(file);
-  a.download = fileName;
-  a.click();
-  sleep(time);
-}
-
-async function readTypedArrayFromFile(fileUrl) {
-  let response = await fetch(fileUrl);
-  const blob = await response.blob();
-  const tyepdArray = new Uint8Array(await blob.arrayBuffer());
-  return tyepdArray;
-}
-
-async function readFromJsonFile(fileUrl) {
-  const response = await fetch(fileUrl);
-  const json = await response.json();
-  if (json.type === 'float') {
-    json.type = 'float32';
-  }
-  return json;
-}
-
-BigInt.prototype.toJSON = function() {
-  return Number(this.toString());
-};
-
-function getParam(name) {
-  name = name.replace(/[\[\]]/g, '\\$&');
-  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)', 'i');
-  let results = regex.exec(window.location.href);
-  if (!results) return null;
-  if (!results[2]) return '';
-  return decodeURIComponent(results[2].replace(/\+/g, ' '));
-}
-
-async function readObjectFromFile(fileUrl) {
-  const response = await fetch(fileUrl);
-  const blob = await response.blob();
-  const blobObject = JSON.parse(await blob.text());
-  return blobObject;
-}
-
 function tensorDimsFromProto(dims) {
   // get rid of Long type for dims
-  return dims.map(d => Long.isLong(d) ? d.toNumber() : d);
+  return dims.map(d => isLong(d) ? d.toNumber() : d);
 }
 
 // opset is array: [{domain: '', version: 8}, ]
@@ -505,7 +508,7 @@ export class OnnxDumpData {
     }
   }
 
-  async setup(runTaskFn) {
+  async setup(onnxModelInferenceFn) {
     window.dump = 2;
     const optimizedModelBuffer = await this.getOptimizedModel();
     const optimizedModelName = this.optimizedModelName;
@@ -519,7 +522,7 @@ export class OnnxDumpData {
     console.log('Dump - Generate input output data.');
     // 3, Generate other dump data: input, output.
     window.dump = 1;
-    await runTaskFn('performance', 'wasm');
+    await onnxModelInferenceFn('performance', 'wasm');
     window.dump = 0;
     await this.setupInputOutputs();
   }
@@ -560,8 +563,6 @@ export class OnnxDumpData {
   }
 
   save() {
-    // writeObjectToFile(this.dumpDataMap, this.modelName +
-    // '-inputoutput.json'); return this.modelName + '-inputoutput';
     const optimizedModelDataName = this.optimizedModelDataName;
     const modelName = this.modelName;
     const dumpDataMap = this.dumpDataMap;
@@ -731,15 +732,30 @@ export class OnnxDumpData {
 }
 
 /*
-Usage:
-
-
-Known bug:
-mobilenetv2-12-disabled not work.
-*/
+ * This tool will compare onnx model node results of two backends, such as wasm
+ * and webgpu. Then output the incorrect nodes as jsonc files, these files can
+ * be used as ort unit test.
+ *
+ * Before run, create a folder like example\modeldata\tinyyolov2-8-disabled,
+ * then copy the .onnx into it.
+ *
+ * Usage:
+ * modelName: name from
+ * https://github.com/webatintel/ort-toolkit/blob/main/models.js, such as
+ * albert-base-v2. onnxModelInferenceFn: a function which run whole inference on
+ * model specificed by modelName. graphOptimizationLevel:
+ * 'disabled'|'basic'|'extended'|'all'. dumpOrCmp: mode 0: will not create any
+ * data file, output a result file. mode 1: generate data file, to use these
+ * file in mode. mode 2: copy file generated by mode 1 to
+ * example\modeldata\tinyyolov2-8-disabled. You can run with default or mode 1 +
+ * mode 2.
+ *
+ * Known bug:
+ * mobilenetv2-12-disabled not work.
+ */
 
 export async function dump(
-    modelName, runTaskFn, graphOptimizationLevel = 'disabled',
+    modelName, onnxModelInferenceFn, graphOptimizationLevel = 'disabled',
     dumpOrCmp = '0') {
   // When dumpOrCmp: 0, dump and cmp not from file.
   // 1, dump data to file; 2, cmp based on file.
@@ -748,7 +764,7 @@ export async function dump(
   const dumpDataMap =
       new OnnxDumpData(modelName, graphOptimizationLevel, dumpOrCmp);
   if (dumpOrCmp != 2) {
-    await dumpDataMap.setup(runTaskFn);
+    await dumpDataMap.setup(onnxModelInferenceFn);
     if (useFile) {
       dumpDataMap.save();
     }
